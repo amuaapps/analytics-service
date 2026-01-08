@@ -1,0 +1,74 @@
+import type { HttpRequest, HttpResponseInit, InvocationContext } from '@azure/functions';
+import { handleIngest } from '../core/ingest-handler.js';
+import type { CoreIngestRequest, QueueAdapter } from '../core/types.js';
+import type { IngestRequestEnvelope } from '../../domain/ingest-types.js';
+import type { Logger } from '../../utils/logger.js';
+import { getOrGenerateRequestId } from '../../utils/correlation.js';
+
+export interface AzureFunctionIngestDependencies {
+  logger: Logger;
+  queueAdapter: QueueAdapter;
+}
+
+async function parseBody(request: HttpRequest): Promise<IngestRequestEnvelope> {
+  try {
+    const body = await request.text();
+    if (!body) {
+      throw new Error('Missing request body');
+    }
+    return JSON.parse(body) as IngestRequestEnvelope;
+  } catch (error) {
+    throw new Error('Invalid JSON in request body');
+  }
+}
+
+async function createCoreRequest(request: HttpRequest): Promise<CoreIngestRequest> {
+  const requestId = getOrGenerateRequestId(request.headers.get('x-request-id') ?? undefined);
+  const payload = await parseBody(request);
+
+  return {
+    requestId,
+    payload,
+  };
+}
+
+function createSuccessResponse(result: { accepted: boolean; eventCount: number; batchId: string }): HttpResponseInit {
+  return {
+    status: 202,
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      accepted: result.accepted,
+      eventCount: result.eventCount,
+    }),
+  };
+}
+
+function createErrorResponse(error: unknown): HttpResponseInit {
+  const message = error instanceof Error ? error.message : 'Internal server error';
+
+  return {
+    status: 500,
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      error: 'Internal Server Error',
+      message,
+    }),
+  };
+}
+
+export function createAzureFunctionIngestHandler(deps: AzureFunctionIngestDependencies) {
+  return async (request: HttpRequest, context: InvocationContext): Promise<HttpResponseInit> => {
+    try {
+      const coreRequest = await createCoreRequest(request);
+      const result = await handleIngest(coreRequest, deps);
+      return createSuccessResponse(result);
+    } catch (error) {
+      deps.logger.error({ err: error, invocationId: context.invocationId }, 'Azure Function ingest handler error');
+      return createErrorResponse(error);
+    }
+  };
+}
