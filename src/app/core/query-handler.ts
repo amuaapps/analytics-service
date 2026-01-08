@@ -1,11 +1,12 @@
 import type { Logger } from '../../utils/logger.js';
 import { createChildLogger } from '../../utils/index.js';
-import type { CoreQueryRequest, CoreQueryResponse, OperationalStorageAdapter } from './types.js';
+import type { CoreQueryRequest, CoreQueryResponse } from './types.js';
+import type { EventRepository } from '../../infra/interfaces.js';
 import { parseCursor, encodeCursor } from '../../domain/query-validation.js';
 
 export interface QueryHandlerDependencies {
   logger: Logger;
-  storageAdapter: OperationalStorageAdapter;
+  storageAdapter: EventRepository;
 }
 
 export async function handleQuery(

@@ -16,6 +16,7 @@ import { createLogger } from './utils/logger.js';
 import { InMemoryQueueAdapter } from './infra/queue/in-memory-queue-adapter.js';
 import { InMemoryOperationalStorage } from './infra/storage/in-memory-operational-storage.js';
 import type { Config } from './config/types.js';
+// In-memory adapters now implement canonical infra interfaces (QueuePublisher, EventRepository)
 
 const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
 

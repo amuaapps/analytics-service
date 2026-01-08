@@ -37,24 +37,12 @@ export interface CoreProcessorResponse {
 }
 
 /**
- * QueueAdapter interface for message enqueueing
+ * Adapter interfaces have been moved to src/infra/interfaces.ts
+ * 
+ * Use these canonical ports:
+ * - QueuePublisher (was QueueAdapter)
+ * - EventRepository (was OperationalStorageAdapter)
+ * - RawEventStore (was RawStorageAdapter)
+ * 
+ * @deprecated Import from '../../infra/interfaces.js' instead
  */
-export interface QueueAdapter {
-  enqueue(message: { requestId: string; batchId: string; events: IngestRequestEnvelope['events'] }): Promise<void>;
-}
-
-/**
- * OperationalStorageAdapter interface for queryable storage
- */
-export interface OperationalStorageAdapter {
-  storeEvents(events: StoredEvent[]): Promise<void>;
-  queryEvents(input: QueryEventsInput): Promise<CoreQueryResponse>;
-  checkEventExists(eventId: string): Promise<boolean>;
-}
-
-/**
- * RawStorageAdapter interface for immutable storage
- */
-export interface RawStorageAdapter {
-  storeRawBatch(batch: { batchId: string; requestId: string; receivedAt: string; events: IngestRequestEnvelope['events'] }): Promise<void>;
-}

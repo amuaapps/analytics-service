@@ -1,13 +1,14 @@
 import type { APIGatewayProxyEvent, APIGatewayProxyResult, Context } from 'aws-lambda';
 import { handleQuery } from '../core/query-handler.js';
-import type { CoreQueryRequest, OperationalStorageAdapter } from '../core/types.js';
+import type { CoreQueryRequest } from '../core/types.js';
+import type { EventRepository } from '../../infra/interfaces.js';
 import type { QueryEventsInput } from '../../domain/query-types.js';
 import type { Logger } from '../../utils/logger.js';
 import { getOrGenerateRequestId } from '../../utils/correlation.js';
 
 export interface LambdaQueryDependencies {
   logger: Logger;
-  storageAdapter: OperationalStorageAdapter;
+  storageAdapter: EventRepository;
 }
 
 function createCoreRequest(event: APIGatewayProxyEvent): CoreQueryRequest {

@@ -4,14 +4,14 @@ import { getOrGenerateRequestId } from '../../utils/correlation.js';
 import { createAuthMiddleware, parseWriteKeys } from '../middleware/auth.js';
 import { createValidationMiddleware } from '../middleware/validation.js';
 import { handleIngest } from '../core/ingest-handler.js';
-import type { QueueAdapter, OperationalStorageAdapter } from '../core/types.js';
+import type { QueuePublisher, EventRepository } from '../../infra/interfaces.js';
 import type { Config } from '../../config/types.js';
 import { createQueryHttpHandler } from './query-handler.js';
 
 export interface ServerDependencies {
   logger: Logger;
-  queueAdapter: QueueAdapter;
-  storageAdapter: OperationalStorageAdapter;
+  queueAdapter: QueuePublisher;
+  storageAdapter: EventRepository;
   config: Config;
 }
 

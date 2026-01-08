@@ -1,12 +1,13 @@
 import type { SQSEvent, SQSRecord, Context } from 'aws-lambda';
 import { handleProcessor } from '../core/processor-handler.js';
-import type { CoreProcessorRequest, OperationalStorageAdapter, RawStorageAdapter } from '../core/types.js';
+import type { CoreProcessorRequest } from '../core/types.js';
+import type { EventRepository, RawEventStore } from '../../infra/interfaces.js';
 import type { Logger } from '../../utils/logger.js';
 
 export interface LambdaProcessorDependencies {
   logger: Logger;
-  operationalStorage: OperationalStorageAdapter;
-  rawStorage: RawStorageAdapter;
+  operationalStorage: EventRepository;
+  rawStorage: RawEventStore;
 }
 
 function parseSQSMessage(record: SQSRecord): CoreProcessorRequest {

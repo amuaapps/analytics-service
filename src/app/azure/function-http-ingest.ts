@@ -1,13 +1,14 @@
 import type { HttpRequest, HttpResponseInit, InvocationContext } from '@azure/functions';
 import { handleIngest } from '../core/ingest-handler.js';
-import type { CoreIngestRequest, QueueAdapter } from '../core/types.js';
+import type { CoreIngestRequest } from '../core/types.js';
+import type { QueuePublisher } from '../../infra/interfaces.js';
 import type { IngestRequestEnvelope } from '../../domain/ingest-types.js';
 import type { Logger } from '../../utils/logger.js';
 import { getOrGenerateRequestId } from '../../utils/correlation.js';
 
 export interface AzureFunctionIngestDependencies {
   logger: Logger;
-  queueAdapter: QueueAdapter;
+  queueAdapter: QueuePublisher;
 }
 
 async function parseBody(request: HttpRequest): Promise<IngestRequestEnvelope> {

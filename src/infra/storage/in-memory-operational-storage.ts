@@ -1,9 +1,9 @@
-import type { OperationalStorageAdapter, CoreQueryResponse } from '../../app/core/types.js';
+import type { EventRepository, QueryEventsResult } from '../interfaces.js';
 import type { StoredEvent } from '../../domain/stored-event-types.js';
 import type { QueryEventsInput } from '../../domain/query-types.js';
 import type { Logger } from '../../utils/logger.js';
 
-export class InMemoryOperationalStorage implements OperationalStorageAdapter {
+export class InMemoryOperationalStorage implements EventRepository {
   private events: Map<string, StoredEvent> = new Map();
   private logger: Logger;
 
@@ -34,7 +34,7 @@ export class InMemoryOperationalStorage implements OperationalStorageAdapter {
     );
   }
 
-  async queryEvents(input: QueryEventsInput): Promise<CoreQueryResponse> {
+  async queryEvents(input: QueryEventsInput): Promise<QueryEventsResult> {
     let results = Array.from(this.events.values());
 
     // Parse cursor if provided

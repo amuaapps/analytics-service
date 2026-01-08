@@ -1,15 +1,15 @@
-import type { QueueAdapter, CoreProcessorRequest } from '../../app/core/types.js';
+import type { QueuePublisher, QueueMessage } from '../interfaces.js';
 import type { Logger } from '../../utils/logger.js';
 
-export class InMemoryQueueAdapter implements QueueAdapter {
-  private queue: CoreProcessorRequest[] = [];
+export class InMemoryQueueAdapter implements QueuePublisher {
+  private queue: QueueMessage[] = [];
   private logger: Logger;
 
   constructor(logger: Logger) {
     this.logger = logger;
   }
 
-  enqueue(message: CoreProcessorRequest): Promise<void> {
+  enqueue(message: QueueMessage): Promise<void> {
     const enrichedMessage = {
       ...message,
       enqueuedAt: new Date().toISOString(),
@@ -30,7 +30,7 @@ export class InMemoryQueueAdapter implements QueueAdapter {
     return Promise.resolve();
   }
 
-  getQueue(): CoreProcessorRequest[] {
+  getQueue(): QueueMessage[] {
     return [...this.queue];
   }
 

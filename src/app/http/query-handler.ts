@@ -3,13 +3,13 @@ import type { Logger } from '../../utils/logger.js';
 import { createChildLogger } from '../../utils/index.js';
 import { validateQueryEventsInput } from '../../domain/query-validation.js';
 import { handleQuery } from '../core/query-handler.js';
-import type { OperationalStorageAdapter } from '../core/types.js';
+import type { EventRepository } from '../../infra/interfaces.js';
 import type { StoredEvent } from '../../domain/stored-event-types.js';
 import { sendErrorResponse, ValidationError, isZodError, sanitizeZodError } from './errors.js';
 
 export interface QueryHttpHandlerDependencies {
   logger: Logger;
-  storageAdapter: OperationalStorageAdapter;
+  storageAdapter: EventRepository;
 }
 
 function sanitizeEventForResponse(event: StoredEvent): StoredEvent {

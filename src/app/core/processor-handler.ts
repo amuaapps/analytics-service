@@ -1,18 +1,13 @@
 import type { Logger } from '../../utils/logger.js';
-import { createChildLogger } from '../../utils/index.js';
-import type { StoredEvent } from '../../domain/stored-event-types.js';
-import { validateIngestRequestEnvelope } from '../../domain/validation.js';
-import type {
-  CoreProcessorRequest,
-  CoreProcessorResponse,
-  OperationalStorageAdapter,
-  RawStorageAdapter,
-} from './types.js';
+import { generateEventId, createChildLogger } from '../../utils/index.js';
+import { transformIngestEventToStored } from '../../domain/event-transformation.js';
+import type { CoreProcessorRequest, CoreProcessorResponse } from './types.js';
+import type { EventRepository, RawEventStore } from '../../infra/interfaces.js';
 
 export interface ProcessorHandlerDependencies {
   logger: Logger;
-  operationalStorage: OperationalStorageAdapter;
-  rawStorage: RawStorageAdapter;
+  operationalStorage: EventRepository;
+  rawStorage: RawEventStore;
 }
 
 function transformToStoredEvent(

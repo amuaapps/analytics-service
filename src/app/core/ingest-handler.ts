@@ -1,10 +1,11 @@
 import type { Logger } from '../../utils/logger.js';
 import { generateBatchId, createChildLogger } from '../../utils/index.js';
-import type { CoreIngestRequest, CoreIngestResponse, QueueAdapter } from './types.js';
+import type { CoreIngestRequest, CoreIngestResponse } from './types.js';
+import type { QueuePublisher } from '../../infra/interfaces.js';
 
 export interface IngestHandlerDependencies {
   logger: Logger;
-  queueAdapter: QueueAdapter;
+  queueAdapter: QueuePublisher;
 }
 
 export async function handleIngest(
