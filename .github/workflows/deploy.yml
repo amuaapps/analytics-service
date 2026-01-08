@@ -26,6 +26,17 @@ on:
           - staging
           - prod
 
+# Prevent concurrent deployments to the same environment
+concurrency:
+  group: deploy-${{ github.ref_name }}-${{ github.event.inputs.environment || 'auto' }}
+  cancel-in-progress: false
+
+# Minimal permissions (least privilege)
+permissions:
+  contents: read
+  id-token: write  # For OIDC if needed in future
+  actions: read
+
 env:
   NODE_VERSION: '20.x'
 
@@ -178,6 +189,7 @@ jobs:
       security-events: write
       actions: read
       contents: read
+      packages: read
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -209,18 +221,19 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
           cache: 'npm'
 
-      - name: Install dependencies
-        run: npm ci --production
+      - name: Install dependencies (with dev dependencies for build tools)
+        run: npm ci
 
       - name: Build TypeScript
         run: npm run build
 
-      - name: Create deployment package
+      - name: Create deployment package (prod dependencies only)
         run: |
           mkdir -p dist/deployment
           cp -r dist/* dist/deployment/
           cp package.json package-lock.json dist/deployment/
-          cd dist/deployment && npm ci --production --ignore-scripts
+          cd dist/deployment
+          npm ci --production --ignore-scripts
           cd ../..
           
       - name: Package for AWS Lambda
@@ -280,40 +293,71 @@ jobs:
           name: deployment-package-aws
           path: ./dist
 
+      - name: Configure Terraform Backend
+        working-directory: infra/aws
+        run: |
+          # Generate backend configuration from GitHub Secrets/Variables
+          # This avoids checking in sensitive backend config
+          cat > backend-generated.hcl <<EOF
+          bucket         = "${{ secrets.TF_STATE_BUCKET || 'analytics-service-terraform-state' }}"
+          key            = "analytics-service/${{ needs.setup.outputs.environment }}/terraform.tfstate"
+          region         = "${{ vars.AWS_REGION || 'us-east-1' }}"
+          encrypt        = true
+          dynamodb_table = "${{ secrets.TF_STATE_LOCK_TABLE || 'terraform-state-lock' }}"
+          EOF
+          
+          echo "Backend configuration generated"
+          cat backend-generated.hcl
+
       - name: Terraform Init
         working-directory: infra/aws
-        run: terraform init -backend-config=backend.hcl
+        run: terraform init -backend-config=backend-generated.hcl
         env:
           TF_VAR_environment: ${{ needs.setup.outputs.environment }}
+          TF_VAR_aws_region: ${{ vars.AWS_REGION || 'us-east-1' }}
+          TF_VAR_project_name: analytics-service
 
       - name: Terraform Plan
         working-directory: infra/aws
         run: terraform plan -out=tfplan
         env:
           TF_VAR_environment: ${{ needs.setup.outputs.environment }}
+          TF_VAR_aws_region: ${{ vars.AWS_REGION || 'us-east-1' }}
+          TF_VAR_project_name: analytics-service
           TF_VAR_analytics_write_key: ${{ secrets.ANALYTICS_WRITE_KEY }}
 
       - name: Terraform Apply
         working-directory: infra/aws
         run: terraform apply -auto-approve tfplan
+        env:
+          TF_VAR_environment: ${{ needs.setup.outputs.environment }}
+          TF_VAR_aws_region: ${{ vars.AWS_REGION || 'us-east-1' }}
+          TF_VAR_project_name: analytics-service
 
       - name: Deploy Lambda functions
         id: deploy
+        env:
+          AWS_REGION: ${{ vars.AWS_REGION || 'us-east-1' }}
+          PROJECT_NAME: analytics-service
+          ENVIRONMENT: ${{ needs.setup.outputs.environment }}
         run: |
-          # Update Lambda function code
+          # Update Lambda function code (region from AWS credentials config)
           aws lambda update-function-code \
-            --function-name analytics-ingest-${{ needs.setup.outputs.environment }} \
+            --function-name ${PROJECT_NAME}-ingest-${ENVIRONMENT} \
             --zip-file fileb://dist/lambda-deployment.zip \
+            --region ${AWS_REGION} \
             --publish > /tmp/ingest-version.json
           
           aws lambda update-function-code \
-            --function-name analytics-query-${{ needs.setup.outputs.environment }} \
+            --function-name ${PROJECT_NAME}-query-${ENVIRONMENT} \
             --zip-file fileb://dist/lambda-deployment.zip \
+            --region ${AWS_REGION} \
             --publish > /tmp/query-version.json
           
           aws lambda update-function-code \
-            --function-name analytics-processor-${{ needs.setup.outputs.environment }} \
+            --function-name ${PROJECT_NAME}-processor-${ENVIRONMENT} \
             --zip-file fileb://dist/lambda-deployment.zip \
+            --region ${AWS_REGION} \
             --publish > /tmp/processor-version.json
           
           # Extract version numbers
@@ -321,12 +365,13 @@ jobs:
           QUERY_VERSION=$(jq -r '.Version' /tmp/query-version.json)
           PROCESSOR_VERSION=$(jq -r '.Version' /tmp/processor-version.json)
           
-          echo "ingest_function=analytics-ingest-${{ needs.setup.outputs.environment }}" >> $GITHUB_OUTPUT
-          echo "query_function=analytics-query-${{ needs.setup.outputs.environment }}" >> $GITHUB_OUTPUT
-          echo "processor_function=analytics-processor-${{ needs.setup.outputs.environment }}" >> $GITHUB_OUTPUT
+          echo "ingest_function=${PROJECT_NAME}-ingest-${ENVIRONMENT}" >> $GITHUB_OUTPUT
+          echo "query_function=${PROJECT_NAME}-query-${ENVIRONMENT}" >> $GITHUB_OUTPUT
+          echo "processor_function=${PROJECT_NAME}-processor-${ENVIRONMENT}" >> $GITHUB_OUTPUT
           echo "new_version=$INGEST_VERSION" >> $GITHUB_OUTPUT
           
           echo "Deployed versions: Ingest=$INGEST_VERSION, Query=$QUERY_VERSION, Processor=$PROCESSOR_VERSION"
+          echo "Region: ${AWS_REGION}"
           echo "Note: Live alias still points to previous version (BLUE)"
 
   # Stage 3: Deploy GREEN (Azure)
@@ -417,11 +462,17 @@ jobs:
 
       - name: Get API Gateway URL
         id: get-url
+        env:
+          AWS_REGION: ${{ vars.AWS_REGION || 'us-east-1' }}
+          PROJECT_NAME: analytics-service
+          ENVIRONMENT: ${{ needs.setup.outputs.environment }}
         run: |
           API_URL=$(aws apigatewayv2 get-apis \
-            --query "Items[?Name=='analytics-service-api-${{ needs.setup.outputs.environment }}'].ApiEndpoint | [0]" \
+            --region ${AWS_REGION} \
+            --query "Items[?Name=='${PROJECT_NAME}-api-${ENVIRONMENT}'].ApiEndpoint | [0]" \
             --output text)
           echo "api_url=$API_URL" >> $GITHUB_OUTPUT
+          echo "API Gateway URL: $API_URL (Region: ${AWS_REGION})"
 
       - name: Run integration tests against GREEN
         run: npm run test:post-deploy
@@ -440,24 +491,30 @@ jobs:
 
       - name: Switch to GREEN (update live alias)
         id: switch
+        env:
+          AWS_REGION: ${{ vars.AWS_REGION || 'us-east-1' }}
         run: |
           # Update live alias to point to new version
           aws lambda update-alias \
             --function-name ${{ needs.deploy-aws-green.outputs.ingest_function }} \
             --name live \
-            --function-version ${{ needs.deploy-aws-green.outputs.new_version }}
+            --function-version ${{ needs.deploy-aws-green.outputs.new_version }} \
+            --region ${AWS_REGION}
           
           aws lambda update-alias \
             --function-name ${{ needs.deploy-aws-green.outputs.query_function }} \
             --name live \
-            --function-version ${{ needs.deploy-aws-green.outputs.new_version }}
+            --function-version ${{ needs.deploy-aws-green.outputs.new_version }} \
+            --region ${AWS_REGION}
           
           aws lambda update-alias \
             --function-name ${{ needs.deploy-aws-green.outputs.processor_function }} \
             --name live \
-            --function-version ${{ needs.deploy-aws-green.outputs.new_version }}
+            --function-version ${{ needs.deploy-aws-green.outputs.new_version }} \
+            --region ${AWS_REGION}
           
           echo "✅ Traffic switched to GREEN (version ${{ needs.deploy-aws-green.outputs.new_version }})"
+          echo "Region: ${AWS_REGION}"
 
       - name: Rollback on failure
         if: failure()

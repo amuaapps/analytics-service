@@ -9,6 +9,7 @@
 # Backend configuration (contains sensitive info)
 backend.tf
 backend.hcl
+backend-generated.hcl
 
 # Lambda deployment packages
 *.zip

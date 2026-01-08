@@ -1,6 +1,13 @@
 terraform {
   required_version = ">= 1.5.0"
 
+  # Backend configuration
+  # In CI/CD, this is configured via -backend-config flags
+  # For local development, use backend.hcl file
+  backend "s3" {
+    # Configuration provided via -backend-config or environment variables
+  }
+
   required_providers {
     aws = {
       source  = "hashicorp/aws"
