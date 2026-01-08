@@ -1,19 +1,18 @@
 import { describe, it, expect, jest, beforeEach } from '@jest/globals';
 import { handleProcessor } from '../../../../src/app/core/processor-handler.js';
-import type {
-  CoreProcessorRequest,
-  OperationalStorageAdapter,
-  RawStorageAdapter,
-  CoreQueryResponse,
-} from '../../../../src/app/core/types.js';
+import type { CoreProcessorRequest, CoreQueryResponse } from '../../../../src/app/core/types.js';
+import type { Logger } from '../../../../src/utils/logger.js';
+import { loadLimitsConfig } from '../../../../src/config/limits.js';
 import type { QueryEventsInput } from '../../../../src/domain/query-types.js';
 import type { StoredEvent } from '../../../../src/domain/stored-event-types.js';
 import { createLogger } from '../../../../src/utils/logger.js';
 import { SCHEMA_VERSION } from '../../../../src/domain/base-types.js';
 
 describe('Core Processor Handler', () => {
-  let mockOperationalStorage: jest.Mocked<OperationalStorageAdapter>;
-  let mockRawStorage: jest.Mocked<RawStorageAdapter>;
+  const limits = loadLimitsConfig();
+  let mockLogger: Logger;
+  let mockOperationalStorage: any;
+  let mockRawStorage: any;
   let logger: ReturnType<typeof createLogger>;
 
   beforeEach(() => {
@@ -24,17 +23,19 @@ describe('Core Processor Handler', () => {
         hasMore: false,
       }),
       checkEventExists: jest.fn<(eventId: string) => Promise<boolean>>().mockResolvedValue(false),
-    } as jest.Mocked<OperationalStorageAdapter>;
+    };
 
     mockRawStorage = {
       storeRawBatch: jest.fn<() => Promise<void>>().mockResolvedValue(undefined),
-    } as jest.Mocked<RawStorageAdapter>;
+    };
 
     logger = createLogger({
       serviceName: 'test-service',
       level: 'error',
       env: 'test',
     });
+
+    mockLogger = logger;
   });
 
   describe('handleProcessor', () => {
@@ -55,11 +56,14 @@ describe('Core Processor Handler', () => {
         ],
       };
 
-      const result = await handleProcessor(request, {
-        logger,
+      const deps = {
+        logger: mockLogger,
         operationalStorage: mockOperationalStorage,
         rawStorage: mockRawStorage,
-      });
+        limits,
+      };
+
+      const result = await handleProcessor(request, deps);
 
       expect(result.processed).toBe(1);
       expect(result.failed).toBe(0);
@@ -112,11 +116,14 @@ describe('Core Processor Handler', () => {
         ],
       };
 
-      const result = await handleProcessor(request, {
-        logger,
+      const deps = {
+        logger: mockLogger,
         operationalStorage: mockOperationalStorage,
         rawStorage: mockRawStorage,
-      });
+        limits,
+      };
+
+      const result = await handleProcessor(request, deps);
 
       expect(result.processed).toBe(3);
       expect(result.failed).toBe(0);
@@ -150,11 +157,14 @@ describe('Core Processor Handler', () => {
         ],
       };
 
-      await handleProcessor(request, {
-        logger,
+      const deps = {
+        logger: mockLogger,
         operationalStorage: mockOperationalStorage,
         rawStorage: mockRawStorage,
-      });
+        limits,
+      };
+
+      await handleProcessor(request, deps);
 
       const storedEvents = mockOperationalStorage.storeEvents.mock.calls[0][0];
       expect(storedEvents[0].receivedAt).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/);
@@ -189,11 +199,14 @@ describe('Core Processor Handler', () => {
         ],
       };
 
-      const result = await handleProcessor(request, {
-        logger,
+      const deps = {
+        logger: mockLogger,
         operationalStorage: mockOperationalStorage,
         rawStorage: mockRawStorage,
-      });
+        limits,
+      };
+
+      const result = await handleProcessor(request, deps);
 
       expect(result.processed).toBe(0);
       expect(result.failed).toBe(2);
@@ -225,11 +238,14 @@ describe('Core Processor Handler', () => {
         ],
       };
 
-      const result = await handleProcessor(request, {
-        logger,
+      const deps = {
+        logger: mockLogger,
         operationalStorage: mockOperationalStorage,
         rawStorage: mockRawStorage,
-      });
+        limits,
+      };
+
+      const result = await handleProcessor(request, deps);
 
       expect(result.processed).toBe(1);
       expect(result.failed).toBe(0);

@@ -52,15 +52,26 @@ param applicationInsightsConnectionString string
 @secure()
 param applicationInsightsInstrumentationKey string
 
-@description('Analytics write key')
-@secure()
-param analyticsWriteKey string
+@description('Key Vault secret URI for analytics write key')
+param keyVaultSecretUri string
 
 @description('CORS allowed origins')
 param corsAllowedOrigins string
 
 @description('Log level')
 param logLevel string
+
+@description('Function App SKU')
+param sku string
+
+@description('Maximum payload size in bytes')
+param maxPayloadSizeBytes int
+
+@description('Maximum events per batch')
+param maxEventsPerBatch int
+
+@description('Maximum query result limit')
+param maxQueryLimit int
 
 @description('Environment')
 param environment string
@@ -141,7 +152,7 @@ resource functionApp 'Microsoft.Web/sites@2022-09-01' = {
         }
         {
           name: 'ANALYTICS_WRITE_KEY'
-          value: analyticsWriteKey
+          value: '@Microsoft.KeyVault(SecretUri=${keyVaultSecretUri})'
         }
         {
           name: 'CORS_ALLOWED_ORIGINS'
@@ -160,19 +171,14 @@ resource functionApp 'Microsoft.Web/sites@2022-09-01' = {
           name: 'AZURE_COSMOS_CONTAINER_NAME'
           value: cosmosDbContainerName
         }
-        // Storage Queue
+        // Storage (Queue and Blob use same connection string)
         {
-          name: 'AZURE_QUEUE_CONNECTION_STRING'
+          name: 'AZURE_STORAGE_CONNECTION_STRING'
           value: queueConnectionString
         }
         {
           name: 'AZURE_QUEUE_NAME'
           value: queueName
-        }
-        // Storage Blob
-        {
-          name: 'AZURE_STORAGE_CONNECTION_STRING'
-          value: blobConnectionString
         }
         {
           name: 'AZURE_BLOB_CONTAINER_NAME'
@@ -262,7 +268,7 @@ resource stagingSlot 'Microsoft.Web/sites/slots@2022-09-01' = {
         }
         {
           name: 'ANALYTICS_WRITE_KEY'
-          value: analyticsWriteKey
+          value: '@Microsoft.KeyVault(SecretUri=${keyVaultSecretUri})'
         }
         {
           name: 'CORS_ALLOWED_ORIGINS'
@@ -281,19 +287,14 @@ resource stagingSlot 'Microsoft.Web/sites/slots@2022-09-01' = {
           name: 'AZURE_COSMOS_CONTAINER_NAME'
           value: cosmosDbContainerName
         }
-        // Storage Queue
+        // Storage (Queue and Blob use same connection string)
         {
-          name: 'AZURE_QUEUE_CONNECTION_STRING'
+          name: 'AZURE_STORAGE_CONNECTION_STRING'
           value: queueConnectionString
         }
         {
           name: 'AZURE_QUEUE_NAME'
           value: queueName
-        }
-        // Storage Blob
-        {
-          name: 'AZURE_STORAGE_CONNECTION_STRING'
-          value: blobConnectionString
         }
         {
           name: 'AZURE_BLOB_CONTAINER_NAME'

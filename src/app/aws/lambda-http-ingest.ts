@@ -46,17 +46,23 @@ function createSuccessResponse(result: { accepted: boolean; eventCount: number; 
   };
 }
 
-function createErrorResponse(error: unknown): APIGatewayProxyResult {
+function createErrorResponse(error: unknown, statusCode: number = 500): APIGatewayProxyResult {
   const message = error instanceof Error ? error.message : 'Internal server error';
+  const code = statusCode === 400 ? 'VALIDATION_ERROR' 
+    : statusCode === 401 ? 'AUTHENTICATION_ERROR'
+    : statusCode === 413 ? 'PAYLOAD_TOO_LARGE'
+    : 'INTERNAL_SERVER_ERROR';
 
   return {
-    statusCode: 500,
+    statusCode,
     headers: {
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
-      error: 'Internal Server Error',
-      message,
+      error: {
+        code,
+        message,
+      },
     }),
   };
 }

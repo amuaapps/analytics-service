@@ -7,6 +7,7 @@ import { handleIngest } from '../core/ingest-handler.js';
 import type { QueuePublisher, EventRepository } from '../../infra/interfaces.js';
 import type { Config } from '../../config/types.js';
 import { createQueryHttpHandler } from './query-handler.js';
+import { sendErrorResponse as sendError, PayloadTooLargeError } from './errors.js';
 
 export interface ServerDependencies {
   logger: Logger;
@@ -48,41 +49,31 @@ function corsMiddleware(config: Config) {
 function errorHandler(logger: Logger) {
   return (err: Error, req: Request, res: Response, _next: NextFunction): void => {
     const requestId = req.id || 'unknown';
-
-    // Log with full details server-side
-    logger.error(
-      {
-        err,
-        requestId,
-        method: req.method,
-        path: req.path,
-        stack: err.stack,
-      },
-      'Unhandled error in request'
-    );
-
-    // Send sanitized error to client (no stack traces)
-    res.status(500).json({
-      error: {
-        code: 'INTERNAL_SERVER_ERROR',
-        message: 'An unexpected error occurred',
-      },
-      requestId,
-    });
+    sendError(res, err, logger, requestId);
   };
 }
+
 
 export function createServer(deps: ServerDependencies): Express {
   const { logger, queueAdapter, storageAdapter, config } = deps;
   const app = express();
 
-  app.use(express.json({ limit: config.limits.maxPayloadSizeBytes }));
+  // JSON body parser with payload size limit
+  app.use(express.json({ 
+    limit: config.limits.maxPayloadSizeBytes,
+    // Handle payload too large errors
+    verify: (_req: Request, _res: Response, buf: Buffer) => {
+      if (buf.length > config.limits.maxPayloadSizeBytes) {
+        throw new PayloadTooLargeError(`Payload exceeds maximum size of ${config.limits.maxPayloadSizeBytes} bytes`);
+      }
+    }
+  }));
   app.use(requestIdMiddleware);
   app.use(corsMiddleware(config));
 
   const writeKeys = parseWriteKeys(config.security.analyticsWriteKey);
   const authMiddleware = createAuthMiddleware({ writeKeys }, logger);
-  const validationMiddleware = createValidationMiddleware(logger);
+  const validationMiddleware = createValidationMiddleware(logger, config.limits);
   const queryHandler = createQueryHttpHandler({ logger, storageAdapter });
 
   app.post(

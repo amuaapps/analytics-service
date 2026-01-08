@@ -34,10 +34,12 @@ export interface AwsConfig {
 }
 
 export interface AzureConfig {
-  cosmosEndpoint: string;
-  cosmosKey: string;
+  cosmosConnectionString: string;
+  cosmosDatabaseName: string;
+  cosmosContainerName: string;
   storageConnectionString: string;
   queueName: string;
+  blobContainerName: string;
 }
 
 export type CloudProvider = 'aws' | 'azure';

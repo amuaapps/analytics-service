@@ -136,21 +136,36 @@ variable "log_retention_days" {
   default     = 30
 }
 
-# Request Limits
+# Request Limits (Hard Maximums Enforced)
 variable "max_payload_size_bytes" {
-  description = "Maximum payload size in bytes"
+  description = "Maximum payload size in bytes (hard max: 1MB)"
   type        = number
   default     = 1048576 # 1MB
+
+  validation {
+    condition     = var.max_payload_size_bytes > 0 && var.max_payload_size_bytes <= 1048576
+    error_message = "Payload size must be between 1 and 1048576 bytes (1MB hard maximum)"
+  }
 }
 
 variable "max_events_per_batch" {
-  description = "Maximum events per batch"
+  description = "Maximum events per batch (hard max: 100)"
   type        = number
   default     = 100
+
+  validation {
+    condition     = var.max_events_per_batch >= 1 && var.max_events_per_batch <= 100
+    error_message = "Events per batch must be between 1 and 100 (hard maximum)"
+  }
 }
 
 variable "max_query_limit" {
-  description = "Maximum query limit"
+  description = "Maximum query result limit (hard max: 1000)"
   type        = number
   default     = 200
+
+  validation {
+    condition     = var.max_query_limit >= 1 && var.max_query_limit <= 1000
+    error_message = "Query limit must be between 1 and 1000 (hard maximum)"
+  }
 }

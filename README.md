@@ -929,7 +929,11 @@ raw_event_retention_days = 365  # Raw storage lifecycle
 - Raw: 1-7 years typical
 - Balance cost vs compliance needs
 
-**Request body:**
+## Contributing
+
+See `docs/agents.md` for coding standards and best practices.
+
+### Request body:
 ```json
 {
   "schemaVersion": "1.0.0",

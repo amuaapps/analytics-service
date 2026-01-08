@@ -2,9 +2,11 @@ import { describe, it, expect, jest, beforeEach } from '@jest/globals';
 import type { Request, Response, NextFunction } from 'express';
 import { createValidationMiddleware } from '../../../../src/app/middleware/validation.js';
 import { createLogger } from '../../../../src/utils/logger.js';
+import { loadLimitsConfig } from '../../../../src/config/limits.js';
 import { SCHEMA_VERSION } from '../../../../src/domain/base-types.js';
 
 describe('Validation Middleware', () => {
+  const limits = loadLimitsConfig();
   let mockLogger: ReturnType<typeof createLogger>;
   let mockReq: Partial<Request>;
   let mockRes: Partial<Response>;
@@ -57,7 +59,7 @@ describe('Validation Middleware', () => {
         ],
       };
 
-      const middleware = createValidationMiddleware(mockLogger);
+      const middleware = createValidationMiddleware(mockLogger, limits);
       middleware(mockReq as Request, mockRes as Response, mockNext);
 
       expect(mockNext).toHaveBeenCalled();
@@ -86,7 +88,7 @@ describe('Validation Middleware', () => {
         ],
       };
 
-      const middleware = createValidationMiddleware(mockLogger);
+      const middleware = createValidationMiddleware(mockLogger, limits);
       middleware(mockReq as Request, mockRes as Response, mockNext);
 
       expect(mockNext).toHaveBeenCalled();
@@ -117,7 +119,7 @@ describe('Validation Middleware', () => {
         ],
       };
 
-      const middleware = createValidationMiddleware(mockLogger);
+      const middleware = createValidationMiddleware(mockLogger, limits);
       middleware(mockReq as Request, mockRes as Response, mockNext);
 
       expect(mockNext).toHaveBeenCalled();
@@ -148,7 +150,7 @@ describe('Validation Middleware', () => {
         ],
       };
 
-      const middleware = createValidationMiddleware(mockLogger);
+      const middleware = createValidationMiddleware(mockLogger, limits);
       middleware(mockReq as Request, mockRes as Response, mockNext);
 
       expect(mockNext).toHaveBeenCalled();
@@ -172,7 +174,7 @@ describe('Validation Middleware', () => {
         ],
       };
 
-      const middleware = createValidationMiddleware(mockLogger);
+      const middleware = createValidationMiddleware(mockLogger, limits);
       middleware(mockReq as Request, mockRes as Response, mockNext);
 
       expect(statusMock).toHaveBeenCalledWith(400);
@@ -201,7 +203,7 @@ describe('Validation Middleware', () => {
         ],
       };
 
-      const middleware = createValidationMiddleware(mockLogger);
+      const middleware = createValidationMiddleware(mockLogger, limits);
       middleware(mockReq as Request, mockRes as Response, mockNext);
 
       expect(statusMock).toHaveBeenCalledWith(400);
@@ -216,7 +218,7 @@ describe('Validation Middleware', () => {
         events: [],
       };
 
-      const middleware = createValidationMiddleware(mockLogger);
+      const middleware = createValidationMiddleware(mockLogger, limits);
       middleware(mockReq as Request, mockRes as Response, mockNext);
 
       expect(statusMock).toHaveBeenCalledWith(400);
@@ -238,7 +240,7 @@ describe('Validation Middleware', () => {
         ],
       };
 
-      const middleware = createValidationMiddleware(mockLogger);
+      const middleware = createValidationMiddleware(mockLogger, limits);
       middleware(mockReq as Request, mockRes as Response, mockNext);
 
       expect(statusMock).toHaveBeenCalledWith(400);
@@ -261,7 +263,7 @@ describe('Validation Middleware', () => {
         ],
       };
 
-      const middleware = createValidationMiddleware(mockLogger);
+      const middleware = createValidationMiddleware(mockLogger, limits);
       middleware(mockReq as Request, mockRes as Response, mockNext);
 
       expect(statusMock).toHaveBeenCalledWith(400);
@@ -284,7 +286,7 @@ describe('Validation Middleware', () => {
         ],
       };
 
-      const middleware = createValidationMiddleware(mockLogger);
+      const middleware = createValidationMiddleware(mockLogger, limits);
       middleware(mockReq as Request, mockRes as Response, mockNext);
 
       expect(statusMock).toHaveBeenCalledWith(400);
@@ -309,7 +311,7 @@ describe('Validation Middleware', () => {
         ],
       };
 
-      const middleware = createValidationMiddleware(mockLogger);
+      const middleware = createValidationMiddleware(mockLogger, limits);
       middleware(mockReq as Request, mockRes as Response, mockNext);
 
       expect(statusMock).toHaveBeenCalledWith(400);
@@ -335,7 +337,7 @@ describe('Validation Middleware', () => {
         ],
       };
 
-      const middleware = createValidationMiddleware(mockLogger);
+      const middleware = createValidationMiddleware(mockLogger, limits);
       middleware(mockReq as Request, mockRes as Response, mockNext);
 
       expect(statusMock).toHaveBeenCalledWith(400);
@@ -369,7 +371,7 @@ describe('Validation Middleware', () => {
         ],
       };
 
-      const middleware = createValidationMiddleware(mockLogger);
+      const middleware = createValidationMiddleware(mockLogger, limits);
       middleware(mockReq as Request, mockRes as Response, mockNext);
 
       expect(statusMock).toHaveBeenCalledWith(400);
@@ -392,7 +394,7 @@ describe('Validation Middleware', () => {
         events,
       };
 
-      const middleware = createValidationMiddleware(mockLogger);
+      const middleware = createValidationMiddleware(mockLogger, limits);
       middleware(mockReq as Request, mockRes as Response, mockNext);
 
       expect(statusMock).toHaveBeenCalledWith(400);
@@ -419,7 +421,7 @@ describe('Validation Middleware', () => {
         ],
       };
 
-      const middleware = createValidationMiddleware(mockLogger);
+      const middleware = createValidationMiddleware(mockLogger, limits);
       middleware(mockReq as Request, mockRes as Response, mockNext);
 
       expect(statusMock).toHaveBeenCalledWith(400);
@@ -453,7 +455,7 @@ describe('Validation Middleware', () => {
         ],
       };
 
-      const middleware = createValidationMiddleware(mockLogger);
+      const middleware = createValidationMiddleware(mockLogger, limits);
       middleware(mockReq as Request, mockRes as Response, mockNext);
 
       expect(statusMock).toHaveBeenCalledWith(400);
@@ -463,7 +465,7 @@ describe('Validation Middleware', () => {
 
   describe('error message sanitization', () => {
     it('should sanitize error messages containing sensitive keywords', () => {
-      const middleware = createValidationMiddleware(mockLogger);
+      const middleware = createValidationMiddleware(mockLogger, limits);
       
       mockReq.body = undefined;
 

@@ -3,11 +3,13 @@ import { handleProcessor } from '../core/processor-handler.js';
 import type { CoreProcessorRequest } from '../core/types.js';
 import type { EventRepository, RawEventStore } from '../../infra/interfaces.js';
 import type { Logger } from '../../utils/logger.js';
+import type { LimitsConfig } from '../../config/types.js';
 
 export interface LambdaProcessorDependencies {
   logger: Logger;
   operationalStorage: EventRepository;
   rawStorage: RawEventStore;
+  limits: LimitsConfig;
 }
 
 function parseSQSMessage(record: SQSRecord): CoreProcessorRequest {
@@ -21,7 +23,7 @@ function parseSQSMessage(record: SQSRecord): CoreProcessorRequest {
 
 export function createLambdaSQSProcessorHandler(deps: LambdaProcessorDependencies) {
   return async (event: SQSEvent, context: Context): Promise<void> => {
-    const { logger, operationalStorage, rawStorage } = deps;
+    const { logger, operationalStorage, rawStorage, limits } = deps;
 
     for (const record of event.Records) {
       try {
@@ -37,6 +39,7 @@ export function createLambdaSQSProcessorHandler(deps: LambdaProcessorDependencie
             logger,
             operationalStorage,
             rawStorage,
+            limits,
           }
         );
 

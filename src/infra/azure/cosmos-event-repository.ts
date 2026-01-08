@@ -5,8 +5,7 @@ import type { QueryEventsInput } from '../../domain/query-types.js';
 import type { Logger } from '../../utils/logger.js';
 
 export interface CosmosEventRepositoryConfig {
-  endpoint: string;
-  key: string;
+  connectionString: string;
   databaseId: string;
   containerId: string;
   logger: Logger;
@@ -16,7 +15,7 @@ export interface CosmosEventRepositoryConfig {
  * Cosmos DB implementation of EventRepository
  * 
  * Container schema:
- * - Partition key: /source/appId (for efficient queries by app)
+ * - Partition key: /pk (top-level field set to appId for efficient queries)
  * - Composite indexes on occurredAt, userId, sessionId for query performance
  * - TTL enabled for automatic data expiration (optional)
  */
@@ -26,10 +25,7 @@ export class CosmosEventRepository implements EventRepository {
 
   constructor(config: CosmosEventRepositoryConfig) {
     this.logger = config.logger;
-    const client = new CosmosClient({
-      endpoint: config.endpoint,
-      key: config.key,
-    });
+    const client = new CosmosClient(config.connectionString);
     this.container = client.database(config.databaseId).container(config.containerId);
   }
 
@@ -40,9 +36,8 @@ export class CosmosEventRepository implements EventRepository {
         operationType: 'Create' as const,
         resourceBody: {
           id: event.eventId,
+          pk: event.source.appId, // Partition key field
           ...event,
-          // Add partition key explicitly
-          partitionKey: event.source.appId,
         },
       }));
 
@@ -75,8 +70,8 @@ export class CosmosEventRepository implements EventRepository {
     try {
       const { appId, from, to, userId, sessionId, types, names, limit = 50, cursor } = input;
 
-      // Build SQL query
-      let query = 'SELECT * FROM c WHERE c.source.appId = @appId';
+      // Build SQL query - query by pk (partition key) for efficiency
+      let query = 'SELECT * FROM c WHERE c.pk = @appId';
       const parameters: Array<{ name: string; value: unknown }> = [
         { name: '@appId', value: appId },
       ];
@@ -124,11 +119,11 @@ export class CosmosEventRepository implements EventRepository {
         parameters,
       };
 
-      const iterator = this.container.items
+      const iterator = await this.container.items
         .query<StoredEvent>(querySpec, {
           maxItemCount: limit + 1, // Fetch one extra to determine hasMore
           continuationToken: cursor,
-          partitionKey: appId, // Use partition key for efficient query
+          partitionKey: appId, // Partition key value (matches pk field)
         });
 
       const { resources: items, continuationToken } = await iterator.fetchNext();

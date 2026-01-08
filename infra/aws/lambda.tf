@@ -29,7 +29,7 @@ resource "aws_lambda_function" "ingest" {
       NODE_ENV                = var.environment
       LOG_LEVEL               = var.log_level
       SQS_QUEUE_URL           = aws_sqs_queue.events.url
-      ANALYTICS_WRITE_KEY     = var.analytics_write_key
+      ANALYTICS_WRITE_KEY_SECRET_ARN = aws_secretsmanager_secret.analytics_write_key.arn
       CORS_ALLOWED_ORIGINS    = var.cors_allowed_origins
       MAX_PAYLOAD_SIZE_BYTES  = var.max_payload_size_bytes
       MAX_EVENTS_PER_BATCH    = var.max_events_per_batch
@@ -75,10 +75,12 @@ resource "aws_lambda_function" "query" {
 
   environment {
     variables = {
-      NODE_ENV             = var.environment
-      LOG_LEVEL            = var.log_level
-      DYNAMODB_TABLE_NAME  = aws_dynamodb_table.events.name
-      MAX_QUERY_LIMIT      = var.max_query_limit
+      NODE_ENV                = var.environment
+      LOG_LEVEL               = var.log_level
+      DYNAMODB_TABLE_NAME     = aws_dynamodb_table.events.name
+      MAX_QUERY_LIMIT         = var.max_query_limit
+      MAX_PAYLOAD_SIZE_BYTES  = var.max_payload_size_bytes
+      MAX_EVENTS_PER_BATCH    = var.max_events_per_batch
     }
   }
 
@@ -121,10 +123,13 @@ resource "aws_lambda_function" "processor" {
 
   environment {
     variables = {
-      NODE_ENV            = var.environment
-      LOG_LEVEL           = var.log_level
-      DYNAMODB_TABLE_NAME = aws_dynamodb_table.events.name
-      S3_RAW_BUCKET_NAME  = aws_s3_bucket.raw_events.id
+      NODE_ENV                = var.environment
+      LOG_LEVEL               = var.log_level
+      SQS_QUEUE_URL           = aws_sqs_queue.events.url
+      DYNAMODB_TABLE_NAME     = aws_dynamodb_table.events.name
+      S3_RAW_BUCKET_NAME      = aws_s3_bucket.raw_events.bucket
+      MAX_PAYLOAD_SIZE_BYTES  = var.max_payload_size_bytes
+      MAX_EVENTS_PER_BATCH    = var.max_events_per_batch
     }
   }
 

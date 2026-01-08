@@ -46,17 +46,23 @@ function createSuccessResponse(result: { accepted: boolean; eventCount: number; 
   };
 }
 
-function createErrorResponse(error: unknown): HttpResponseInit {
+function createErrorResponse(error: unknown, status: number = 500): HttpResponseInit {
   const message = error instanceof Error ? error.message : 'Internal server error';
+  const code = status === 400 ? 'VALIDATION_ERROR'
+    : status === 401 ? 'AUTHENTICATION_ERROR'
+    : status === 413 ? 'PAYLOAD_TOO_LARGE'
+    : 'INTERNAL_SERVER_ERROR';
 
   return {
-    status: 500,
+    status,
     headers: {
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
-      error: 'Internal Server Error',
-      message,
+      error: {
+        code,
+        message,
+      },
     }),
   };
 }

@@ -26,17 +26,35 @@ export function getOptionalEnvVar(key: string, defaultValue?: string): string | 
   return value.trim();
 }
 
-export function getEnvVarAsInt(key: string, defaultValue: number): number {
-  const value = process.env[key];
-  if (!value || value.trim() === '') {
+export function getEnvVarAsInt(
+  name: string, 
+  defaultValue: number,
+  options?: { min?: number; max?: number }
+): number {
+  const value = process.env[name];
+  if (!value) {
     return defaultValue;
   }
-  const parsed = parseInt(value.trim(), 10);
+
+  const parsed = parseInt(value, 10);
   if (isNaN(parsed)) {
     throw new ConfigurationError(
-      `Environment variable ${key} must be a valid integer, got: ${value}`
+      `Environment variable ${name} must be a valid integer, got: ${value}`
     );
   }
+
+  if (options?.min !== undefined && parsed < options.min) {
+    throw new ConfigurationError(
+      `Environment variable ${name} must be >= ${options.min}, got: ${parsed}`
+    );
+  }
+
+  if (options?.max !== undefined && parsed > options.max) {
+    throw new ConfigurationError(
+      `Environment variable ${name} cannot exceed ${options.max} (hard maximum), got: ${parsed}`
+    );
+  }
+
   return parsed;
 }
 

@@ -3,11 +3,13 @@ import { handleProcessor } from '../core/processor-handler.js';
 import type { CoreProcessorRequest } from '../core/types.js';
 import type { EventRepository, RawEventStore } from '../../infra/interfaces.js';
 import type { Logger } from '../../utils/logger.js';
+import type { LimitsConfig } from '../../config/types.js';
 
 export interface AzureFunctionProcessorDependencies {
   logger: Logger;
   operationalStorage: EventRepository;
   rawStorage: RawEventStore;
+  limits: LimitsConfig;
 }
 
 function parseQueueMessage(message: unknown): CoreProcessorRequest {
@@ -23,7 +25,7 @@ function parseQueueMessage(message: unknown): CoreProcessorRequest {
 
 export function createAzureFunctionQueueProcessorHandler(deps: AzureFunctionProcessorDependencies) {
   return async (queueItem: unknown, _context: InvocationContext): Promise<void> => {
-    const { logger, operationalStorage, rawStorage } = deps;
+    const { logger, operationalStorage, rawStorage, limits } = deps;
 
     try {
       const coreRequest = parseQueueMessage(queueItem);
@@ -32,6 +34,7 @@ export function createAzureFunctionQueueProcessorHandler(deps: AzureFunctionProc
         logger,
         operationalStorage,
         rawStorage,
+        limits,
       });
 
       if (result.failed > 0) {

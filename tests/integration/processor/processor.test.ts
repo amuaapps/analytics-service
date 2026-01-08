@@ -3,10 +3,12 @@ import { handleProcessor } from '../../../src/app/core/processor-handler.js';
 import { InMemoryOperationalStorage } from '../../../src/infra/storage/in-memory-operational-storage.js';
 import { InMemoryRawStorage } from '../../../src/infra/storage/in-memory-raw-storage.js';
 import { createLogger } from '../../../src/utils/logger.js';
+import { loadLimitsConfig } from '../../../src/config/limits.js';
 import { SCHEMA_VERSION } from '../../../src/domain/base-types.js';
 import type { CoreProcessorRequest } from '../../../src/app/core/types.js';
 
 describe('Processor Integration Tests', () => {
+  const limits = loadLimitsConfig();
   let operationalStorage: InMemoryOperationalStorage;
   let rawStorage: InMemoryRawStorage;
   let logger: ReturnType<typeof createLogger>;
@@ -44,6 +46,7 @@ describe('Processor Integration Tests', () => {
         logger,
         operationalStorage,
         rawStorage,
+        limits,
       });
 
       expect(result.processed).toBe(1);
@@ -104,6 +107,7 @@ describe('Processor Integration Tests', () => {
         logger,
         operationalStorage,
         rawStorage,
+        limits,
       });
 
       expect(result.processed).toBe(3);
@@ -136,6 +140,7 @@ describe('Processor Integration Tests', () => {
         logger,
         operationalStorage,
         rawStorage,
+        limits,
       });
 
       expect(result1.processed).toBe(1);
@@ -147,6 +152,7 @@ describe('Processor Integration Tests', () => {
         logger,
         operationalStorage,
         rawStorage,
+        limits,
       });
 
       expect(result2.processed).toBe(0);
@@ -173,7 +179,7 @@ describe('Processor Integration Tests', () => {
             },
           ],
         },
-        { logger, operationalStorage, rawStorage }
+        { logger, operationalStorage, rawStorage, limits }
       );
 
       // Process batch with mix of new and duplicate events
@@ -206,6 +212,7 @@ describe('Processor Integration Tests', () => {
         logger,
         operationalStorage,
         rawStorage,
+        limits,
       });
 
       expect(result.processed).toBe(1); // Only new event
@@ -236,6 +243,7 @@ describe('Processor Integration Tests', () => {
         logger,
         operationalStorage,
         rawStorage,
+        limits,
       });
 
       expect(result.processed).toBe(0);
@@ -267,6 +275,7 @@ describe('Processor Integration Tests', () => {
         logger,
         operationalStorage,
         rawStorage,
+        limits,
       });
 
       expect(result.processed).toBe(0);
@@ -307,6 +316,7 @@ describe('Processor Integration Tests', () => {
         logger,
         operationalStorage: failingStorage,
         rawStorage,
+        limits,
       });
 
       expect(result.processed).toBe(0);
@@ -348,6 +358,7 @@ describe('Processor Integration Tests', () => {
         logger,
         operationalStorage,
         rawStorage: failingRawStorage,
+        limits,
       });
 
       expect(result.processed).toBe(0);
@@ -376,7 +387,7 @@ describe('Processor Integration Tests', () => {
             },
           ],
         },
-        { logger, operationalStorage, rawStorage }
+        { logger, operationalStorage, rawStorage, limits }
       );
 
       const initialSize = operationalStorage.size();
@@ -403,6 +414,7 @@ describe('Processor Integration Tests', () => {
         logger,
         operationalStorage,
         rawStorage,
+        limits,
       });
 
       // Existing data should be unchanged
@@ -452,12 +464,14 @@ describe('Processor Integration Tests', () => {
         logger,
         operationalStorage,
         rawStorage,
+        limits,
       });
 
       await handleProcessor(request2, {
         logger,
         operationalStorage,
         rawStorage,
+        limits,
       });
 
       expect(rawStorage.size()).toBe(2);

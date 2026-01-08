@@ -9,6 +9,7 @@ import type { APIGatewayProxyEvent, APIGatewayProxyResult, Context, SQSEvent } f
 import { createLambdaIngestHandler } from './lambda-http-ingest.js';
 import { createLambdaQueryHandler } from './lambda-http-query.js';
 import { createLambdaSQSProcessorHandler } from './lambda-sqs-processor.js';
+import { loadLimitsConfig } from '../../config/limits.js';
 import { createLogger } from '../../utils/logger.js';
 import { SQSQueuePublisher } from '../../infra/aws/sqs-queue-publisher.js';
 import { DynamoDBEventRepository } from '../../infra/aws/dynamodb-event-repository.js';
@@ -157,6 +158,7 @@ export async function processorHandler(
     // Lazy initialize handler
     if (!processorHandlerInstance) {
       const config = loadConfig();
+      const limits = loadLimitsConfig();
       const logger = createLogger({
         serviceName: 'analytics-processor',
         env: config.NODE_ENV,
@@ -181,6 +183,7 @@ export async function processorHandler(
         logger,
         operationalStorage,
         rawStorage,
+        limits,
       });
     }
 

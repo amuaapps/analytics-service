@@ -24,8 +24,17 @@ function loadServiceConfig(): ServiceConfig {
   };
 }
 
-function loadSecurityConfig(): SecurityConfig {
-  const analyticsWriteKey = getRequiredEnvVar('ANALYTICS_WRITE_KEY');
+async function loadSecurityConfig(cloudProvider?: string): Promise<SecurityConfig> {
+  // Load write key from secret store if cloud provider is detected
+  let analyticsWriteKey: string;
+  
+  if (cloudProvider === 'aws' || cloudProvider === 'azure') {
+    const { loadAnalyticsWriteKey } = await import('./secrets.js');
+    analyticsWriteKey = await loadAnalyticsWriteKey(cloudProvider as 'aws' | 'azure');
+  } else {
+    // Fallback to env var for local development
+    analyticsWriteKey = getRequiredEnvVar('ANALYTICS_WRITE_KEY');
+  }
 
   const corsOriginsEnvValue = process.env.CORS_ALLOWED_ORIGINS;
   if (corsOriginsEnvValue !== undefined && corsOriginsEnvValue.trim() === '') {
@@ -47,16 +56,15 @@ function loadSecurityConfig(): SecurityConfig {
 
 let cachedConfig: Config | null = null;
 
-export function loadConfig(): Config {
+export async function loadConfig(): Promise<Config> {
   if (cachedConfig) {
     return cachedConfig;
   }
 
   const service = loadServiceConfig();
-  const security = loadSecurityConfig();
-  const limits = loadLimitsConfig();
-
   const cloudProvider = detectCloudProvider();
+  const security = await loadSecurityConfig(cloudProvider);
+  const limits = loadLimitsConfig();
 
   const config: Config = {
     service,

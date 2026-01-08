@@ -1,13 +1,16 @@
 import type { Logger } from '../../utils/logger.js';
-import { generateEventId, createChildLogger } from '../../utils/index.js';
-import { transformIngestEventToStored } from '../../domain/event-transformation.js';
+import { createChildLogger } from '../../utils/index.js';
 import type { CoreProcessorRequest, CoreProcessorResponse } from './types.js';
+import type { StoredEvent } from '../../domain/stored-event-types.js';
 import type { EventRepository, RawEventStore } from '../../infra/interfaces.js';
+import { createValidateIngestRequestEnvelope } from '../../domain/validation.js';
+import type { LimitsConfig } from '../../config/types.js';
 
 export interface ProcessorHandlerDependencies {
   logger: Logger;
   operationalStorage: EventRepository;
   rawStorage: RawEventStore;
+  limits: LimitsConfig;
 }
 
 function transformToStoredEvent(
@@ -28,7 +31,7 @@ export async function handleProcessor(
   deps: ProcessorHandlerDependencies
 ): Promise<CoreProcessorResponse> {
   const { requestId, batchId, events } = request;
-  const { logger, operationalStorage, rawStorage } = deps;
+  const { logger, operationalStorage, rawStorage, limits } = deps;
 
   const eventIds = events.map((e) => e.eventId);
 
@@ -38,8 +41,9 @@ export async function handleProcessor(
     eventIds,
     eventCount: events.length,
   });
+  const validateIngestRequestEnvelope = createValidateIngestRequestEnvelope(limits);
 
-  batchLogger.info('Processing event batch');
+  batchLogger.info({ eventCount: events.length }, 'Processing batch');
 
   // Defensive validation - do not assume ingest validated
   try {
@@ -49,10 +53,7 @@ export async function handleProcessor(
     return {
       processed: 0,
       failed: events.length,
-      errors: events.map((event) => ({
-        eventId: event.eventId,
-        error: error instanceof Error ? error.message : 'Validation failed',
-      })),
+      errors: [{ eventId: 'batch', error: 'Batch validation failed' }],
     };
   }
 

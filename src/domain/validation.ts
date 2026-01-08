@@ -1,16 +1,9 @@
 import { z } from 'zod';
 import { SCHEMA_VERSION } from './base-types.js';
+import type { LimitsConfig } from '../config/types.js';
 
 const EVENT_NAME_PATTERN = /^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)*$/;
 const PROPERTY_KEY_PATTERN = /^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)*$/;
-
-const MAX_EVENTS_PER_BATCH = 50;
-const MIN_EVENTS_PER_BATCH = 1;
-const MAX_PROPERTY_DEPTH = 3;
-const MAX_KEYS_PER_LEVEL = 50;
-const MAX_STRING_LENGTH = 2048;
-const MAX_ARRAY_LENGTH = 100;
-const MAX_PAYLOAD_SIZE_BYTES = 32 * 1024;
 
 const platformSchema = z.enum(['web', 'ios', 'android', 'server']);
 
@@ -35,19 +28,20 @@ const actorSchema = z
     message: 'At least one of userId or anonymousId must be present',
   });
 
+// Context schema uses fixed limits (not configurable)
 const contextSchema = z
   .object({
     locale: z.string().max(50).optional(),
     timezone: z.string().max(100).optional(),
     page: z
       .object({
-        url: z.string().max(MAX_STRING_LENGTH).optional(),
-        path: z.string().max(MAX_STRING_LENGTH).optional(),
-        referrer: z.string().max(MAX_STRING_LENGTH).optional(),
-        title: z.string().max(MAX_STRING_LENGTH).optional(),
+        url: z.string().max(2048).optional(),
+        path: z.string().max(2048).optional(),
+        referrer: z.string().max(2048).optional(),
+        title: z.string().max(2048).optional(),
       })
       .optional(),
-    userAgent: z.string().max(MAX_STRING_LENGTH).optional(),
+    userAgent: z.string().max(2048).optional(),
     device: z.record(z.unknown()).optional(),
   })
   .optional();
@@ -64,55 +58,71 @@ const validatePropertyKey = (key: string): boolean => {
   return PROPERTY_KEY_PATTERN.test(key);
 };
 
-const validatePropertiesDepth = (obj: unknown, maxDepth: number, currentDepth = 0): boolean => {
-  if (currentDepth > maxDepth) return false;
-  if (typeof obj !== 'object' || obj === null) return true;
+function createValidatePropertiesDepth(limits: LimitsConfig) {
+  return (obj: unknown, maxDepth: number, currentDepth = 0): boolean => {
+    if (currentDepth > maxDepth) return false;
+    if (typeof obj !== 'object' || obj === null) return true;
 
-  if (Array.isArray(obj)) {
-    if (obj.length > MAX_ARRAY_LENGTH) return false;
-    return obj.every((item) => validatePropertiesDepth(item, maxDepth, currentDepth + 1));
-  }
+    if (Array.isArray(obj)) {
+      if (obj.length > limits.maxArrayLength) return false;
+      return obj.every((item) => createValidatePropertiesDepth(limits)(item, maxDepth, currentDepth + 1));
+    }
 
-  const keys = Object.keys(obj);
-  if (keys.length > MAX_KEYS_PER_LEVEL) return false;
-  if (!keys.every(validatePropertyKey)) return false;
+    const keys = Object.keys(obj);
+    if (keys.length > limits.maxKeysPerLevel) return false;
+    if (!keys.every(validatePropertyKey)) return false;
 
-  return keys.every((key) =>
-    validatePropertiesDepth((obj as Record<string, unknown>)[key], maxDepth, currentDepth + 1)
-  );
-};
+    return keys.every((key) =>
+      createValidatePropertiesDepth(limits)((obj as Record<string, unknown>)[key], maxDepth, currentDepth + 1)
+    );
+  };
+}
 
-const validateStringLength = (obj: unknown): boolean => {
-  if (typeof obj === 'string') {
-    return obj.length <= MAX_STRING_LENGTH;
-  }
-  if (typeof obj !== 'object' || obj === null) return true;
+function createValidateStringLength(limits: LimitsConfig) {
+  const validate = (obj: unknown): boolean => {
+    if (typeof obj === 'string') {
+      return obj.length <= limits.maxStringLength;
+    }
+    if (typeof obj !== 'object' || obj === null) return true;
 
-  if (Array.isArray(obj)) {
-    return obj.every(validateStringLength);
-  }
+    if (Array.isArray(obj)) {
+      return obj.every(validate);
+    }
 
-  return Object.values(obj).every(validateStringLength);
-};
+    return Object.values(obj).every(validate);
+  };
+  return validate;
+}
 
-const propertiesSchema = z
-  .record(z.unknown())
-  .refine((data) => validatePropertiesDepth(data, MAX_PROPERTY_DEPTH), {
-    message: `Properties must not exceed depth of ${MAX_PROPERTY_DEPTH}`,
-  })
-  .refine((data) => validateStringLength(data), {
-    message: `String values must not exceed ${MAX_STRING_LENGTH} characters`,
-  })
-  .optional();
+function createPropertiesSchema(limits: LimitsConfig) {
+  const validatePropertiesDepth = createValidatePropertiesDepth(limits);
+  const validateStringLength = createValidateStringLength(limits);
+  
+  return z
+    .record(z.unknown())
+    .refine((data) => validatePropertiesDepth(data, limits.maxPropertyDepth), {
+      message: `Properties must not exceed depth of ${limits.maxPropertyDepth}`,
+    })
+    .refine((data) => validateStringLength(data), {
+      message: `String values must not exceed ${limits.maxStringLength} characters`,
+    })
+    .optional();
+}
 
-const traitsSchema = z
-  .record(z.unknown())
-  .refine((data) => validatePropertiesDepth(data, MAX_PROPERTY_DEPTH), {
-    message: `Traits must not exceed depth of ${MAX_PROPERTY_DEPTH}`,
-  })
-  .refine((data) => validateStringLength(data), {
-    message: `String values must not exceed ${MAX_STRING_LENGTH} characters`,
-  });
+function createTraitsSchema(limits: LimitsConfig) {
+  const validatePropertiesDepth = createValidatePropertiesDepth(limits);
+  const validateStringLength = createValidateStringLength(limits);
+  
+  return z
+    .record(z.unknown())
+    .refine((data) => validatePropertiesDepth(data, limits.maxPropertyDepth), {
+      message: `Traits must not exceed depth of ${limits.maxPropertyDepth}`,
+    })
+    .refine((data) => validateStringLength(data), {
+      message: `String values must not exceed ${limits.maxStringLength} characters`,
+    })
+    .optional();
+}
 
 const baseEventSchema = z.object({
   schemaVersion: z.literal(SCHEMA_VERSION),
@@ -124,54 +134,72 @@ const baseEventSchema = z.object({
   consent: consentSchema,
 });
 
-const trackEventSchema = baseEventSchema.extend({
-  type: z.literal('track'),
-  name: z.string().regex(EVENT_NAME_PATTERN, {
-    message: 'Event name must be lowercase snake_case with optional dot namespaces',
-  }),
-  properties: propertiesSchema,
-});
+function createTrackEventSchema(limits: LimitsConfig) {
+  const propertiesSchema = createPropertiesSchema(limits);
+  
+  return baseEventSchema.extend({
+    type: z.literal('track'),
+    name: z.string().regex(EVENT_NAME_PATTERN, {
+      message: 'Event name must be lowercase snake_case with optional dot namespaces',
+    }),
+    properties: propertiesSchema,
+  });
+}
 
-const pageEventSchema = baseEventSchema.extend({
-  type: z.literal('page'),
-  name: z.string().regex(EVENT_NAME_PATTERN, {
-    message: 'Event name must be lowercase snake_case with optional dot namespaces',
-  }),
-  properties: propertiesSchema,
-});
+function createPageEventSchema(limits: LimitsConfig) {
+  const propertiesSchema = createPropertiesSchema(limits);
+  
+  return baseEventSchema.extend({
+    type: z.literal('page'),
+    name: z.string().regex(EVENT_NAME_PATTERN, {
+      message: 'Event name must be lowercase snake_case with optional dot namespaces',
+    }),
+    properties: propertiesSchema,
+  });
+}
 
-const identifyEventSchema = baseEventSchema.extend({
-  type: z.literal('identify'),
-  traits: traitsSchema,
-});
+function createIdentifyEventSchema(limits: LimitsConfig) {
+  const traitsSchema = createTraitsSchema(limits);
+  
+  return baseEventSchema.extend({
+    type: z.literal('identify'),
+    traits: traitsSchema,
+  });
+}
 
-export const ingestEventSchema = z.discriminatedUnion('type', [
-  trackEventSchema,
-  pageEventSchema,
-  identifyEventSchema,
-]);
+function createIngestEventSchema(limits: LimitsConfig) {
+  return z.discriminatedUnion('type', [
+    createTrackEventSchema(limits),
+    createPageEventSchema(limits),
+    createIdentifyEventSchema(limits),
+  ]);
+}
 
-export const ingestRequestEnvelopeSchema = z
-  .object({
-    schemaVersion: z.literal(SCHEMA_VERSION),
-    sentAt: z.string().datetime().optional(),
-    events: z
-      .array(ingestEventSchema)
-      .min(MIN_EVENTS_PER_BATCH, `Batch must contain at least ${MIN_EVENTS_PER_BATCH} event`)
-      .max(
-        MAX_EVENTS_PER_BATCH,
-        `Batch must not exceed ${MAX_EVENTS_PER_BATCH} events per request`
-      ),
-  })
-  .refine(
-    (data) => {
-      const size = JSON.stringify(data).length;
-      return size <= MAX_PAYLOAD_SIZE_BYTES;
-    },
-    {
-      message: `Payload size must not exceed ${MAX_PAYLOAD_SIZE_BYTES} bytes`,
-    }
-  );
+export function createIngestRequestEnvelopeSchema(limits: LimitsConfig) {
+  const ingestEventSchema = createIngestEventSchema(limits);
+  
+  return z
+    .object({
+      schemaVersion: z.literal(SCHEMA_VERSION),
+      sentAt: z.string().datetime().optional(),
+      events: z
+        .array(ingestEventSchema)
+        .min(limits.minEventsPerBatch, `Batch must contain at least ${limits.minEventsPerBatch} event`)
+        .max(
+          limits.maxEventsPerBatch,
+          `Batch must not exceed ${limits.maxEventsPerBatch} events per request`
+        ),
+    })
+    .refine(
+      (data) => {
+        const size = JSON.stringify(data).length;
+        return size <= limits.maxPayloadSizeBytes;
+      },
+      {
+        message: `Payload size must not exceed ${limits.maxPayloadSizeBytes} bytes`,
+      }
+    );
+}
 
 const sortOrderSchema = z.enum(['asc', 'desc']).optional();
 
@@ -189,18 +217,14 @@ export const queryEventsInputSchema = z.object({
   sort: sortOrderSchema,
 });
 
-export const VALIDATION_CONSTANTS = {
-  MAX_EVENTS_PER_BATCH,
-  MIN_EVENTS_PER_BATCH,
-  MAX_PROPERTY_DEPTH,
-  MAX_KEYS_PER_LEVEL,
-  MAX_STRING_LENGTH,
-  MAX_ARRAY_LENGTH,
-  MAX_PAYLOAD_SIZE_BYTES,
+export const VALIDATION_PATTERNS = {
   EVENT_NAME_PATTERN,
   PROPERTY_KEY_PATTERN,
 } as const;
 
-export function validateIngestRequestEnvelope(data: unknown): void {
-  ingestRequestEnvelopeSchema.parse(data);
+export function createValidateIngestRequestEnvelope(limits: LimitsConfig) {
+  const schema = createIngestRequestEnvelopeSchema(limits);
+  return (data: unknown): void => {
+    schema.parse(data);
+  };
 }

@@ -51,6 +51,21 @@ param rawEventRetentionDays int = 365
 ])
 param functionAppSku string = 'Y1'
 
+@description('Maximum payload size in bytes (hard max: 1MB)')
+@minValue(1024)
+@maxValue(1048576)
+param maxPayloadSizeBytes int = 1048576
+
+@description('Maximum events per batch (hard max: 100)')
+@minValue(1)
+@maxValue(100)
+param maxEventsPerBatch int = 100
+
+@description('Maximum query result limit (hard max: 1000)')
+@minValue(1)
+@maxValue(1000)
+param maxQueryLimit int = 200
+
 @description('Tags for all resources')
 param tags object = {
   Project: projectName
@@ -97,12 +112,12 @@ module storage 'modules/storage.bicep' = {
 
 // Key Vault
 module keyVault 'modules/keyvault.bicep' = {
-  name: 'keyvault-deployment'
+  name: 'keyVault'
   params: {
     keyVaultName: keyVaultName
     location: location
-    analyticsWriteKey: analyticsWriteKey
     tags: tags
+    analyticsWriteKey: analyticsWriteKey
   }
 }
 
@@ -121,12 +136,14 @@ module appInsights 'modules/appinsights.bicep' = {
 module functionApp 'modules/functionapp.bicep' = {
   name: 'functionapp-deployment'
   params: {
-    functionAppName: functionAppName
-    appServicePlanName: appServicePlanName
+    projectName: projectName
+    environment: environment
     location: location
-    sku: functionAppSku
     storageAccountName: storage.outputs.storageAccountName
-    storageAccountKey: storage.outputs.storageAccountKey
+    appInsightsConnectionString: appInsights.outputs.connectionString
+    appInsightsInstrumentationKey: appInsights.outputs.instrumentationKey
+    keyVaultSecretUri: keyVault.outputs.analyticsWriteKeySecretUri
+    keyVaultName: keyVault.outputs.keyVaultName
     cosmosDbConnectionString: cosmosDb.outputs.connectionString
     cosmosDbDatabaseName: cosmosDb.outputs.databaseName
     cosmosDbContainerName: cosmosDb.outputs.containerName
@@ -134,10 +151,10 @@ module functionApp 'modules/functionapp.bicep' = {
     queueName: storage.outputs.queueName
     blobConnectionString: storage.outputs.blobConnectionString
     blobContainerName: storage.outputs.blobContainerName
-    keyVaultName: keyVault.outputs.keyVaultName
-    applicationInsightsConnectionString: appInsights.outputs.connectionString
-    applicationInsightsInstrumentationKey: appInsights.outputs.instrumentationKey
-    analyticsWriteKey: analyticsWriteKey
+    sku: functionAppSku
+    maxPayloadSizeBytes: maxPayloadSizeBytes
+    maxEventsPerBatch: maxEventsPerBatch
+    maxQueryLimit: maxQueryLimit
     corsAllowedOrigins: corsAllowedOrigins
     logLevel: logLevel
     environment: environment

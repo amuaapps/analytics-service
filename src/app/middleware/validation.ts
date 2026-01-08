@@ -1,17 +1,9 @@
 import type { Request, Response, NextFunction } from 'express';
 import { ZodError } from 'zod';
 import type { Logger } from '../../utils/logger.js';
-import { ingestRequestEnvelopeSchema } from '../../domain/validation.js';
-
-export class ValidationError extends Error {
-  constructor(
-    message: string,
-    public readonly details: unknown
-  ) {
-    super(message);
-    this.name = 'ValidationError';
-  }
-}
+import { createIngestRequestEnvelopeSchema } from '../../domain/validation.js';
+import { ValidationError, sendErrorResponse } from '../http/errors.js';
+import type { LimitsConfig } from '../../config/types.js';
 
 function sanitizeZodError(error: ZodError): unknown {
   return error.issues.map((issue) => ({
@@ -39,7 +31,9 @@ function sanitizeErrorMessage(message: string): string {
   return message;
 }
 
-export function createValidationMiddleware(logger: Logger) {
+export function createValidationMiddleware(logger: Logger, limits: LimitsConfig) {
+  const ingestRequestEnvelopeSchema = createIngestRequestEnvelopeSchema(limits);
+  
   return (req: Request, res: Response, next: NextFunction): void => {
     const requestId = req.id ?? 'unknown';
     
@@ -48,23 +42,9 @@ export function createValidationMiddleware(logger: Logger) {
 
       if (!result.success) {
         const sanitizedErrors = sanitizeZodError(result.error);
+        const error = new ValidationError('Invalid request payload', sanitizedErrors);
         
-        logger.warn(
-          {
-            requestId,
-            validationErrors: sanitizedErrors,
-          },
-          'Request validation failed'
-        );
-
-        res.status(400).json({
-          error: {
-            code: 'VALIDATION_ERROR',
-            message: 'Invalid request payload',
-            details: sanitizedErrors,
-          },
-          requestId,
-        });
+        sendErrorResponse(res, error, logger, requestId);
         return;
       }
 
@@ -83,19 +63,9 @@ export function createValidationMiddleware(logger: Logger) {
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown validation error';
       const sanitizedMessage = sanitizeErrorMessage(errorMessage);
+      const validationError = new ValidationError(sanitizedMessage);
 
-      logger.error(
-        {
-          requestId,
-          err: error,
-        },
-        'Validation middleware error'
-      );
-
-      res.status(400).json({
-        error: 'Bad Request',
-        message: sanitizedMessage,
-      });
+      sendErrorResponse(res, validationError, logger, requestId);
     }
   };
 }

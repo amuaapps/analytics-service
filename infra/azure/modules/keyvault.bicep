@@ -4,12 +4,12 @@ param keyVaultName string
 @description('Location for resources')
 param location string
 
-@description('Analytics write key secret value')
-@secure()
-param analyticsWriteKey string
-
 @description('Tags for resources')
 param tags object
+
+@description('Analytics write key')
+@secure()
+param analyticsWriteKey string
 
 // Key Vault
 resource keyVault 'Microsoft.KeyVault/vaults@2023-02-01' = {
@@ -38,12 +38,15 @@ resource keyVault 'Microsoft.KeyVault/vaults@2023-02-01' = {
 }
 
 // Secret: Analytics Write Key
-resource writeKeySecret 'Microsoft.KeyVault/vaults/secrets@2023-02-01' = {
+resource analyticsWriteKeySecret 'Microsoft.KeyVault/vaults/secrets@2023-02-01' = {
   parent: keyVault
   name: 'analytics-write-key'
   properties: {
     value: analyticsWriteKey
     contentType: 'text/plain'
+    attributes: {
+      enabled: true
+    }
   }
 }
 
@@ -51,5 +54,4 @@ resource writeKeySecret 'Microsoft.KeyVault/vaults/secrets@2023-02-01' = {
 output keyVaultName string = keyVault.name
 output keyVaultId string = keyVault.id
 output keyVaultUri string = keyVault.properties.vaultUri
-output writeKeySecretName string = writeKeySecret.name
-output writeKeySecretUri string = writeKeySecret.properties.secretUri
+output analyticsWriteKeySecretUri string = analyticsWriteKeySecret.properties.secretUri

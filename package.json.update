@@ -1,0 +1,6 @@
+{
+  "note": "Add @aws-sdk/client-secrets-manager to dependencies",
+  "dependency": "@aws-sdk/client-secrets-manager",
+  "version": "^3.0.0",
+  "reason": "Required for fetching secrets from AWS Secrets Manager at runtime"
+}

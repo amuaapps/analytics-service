@@ -29,8 +29,10 @@ src/domain/
 ### Enums
 - `EventType`: `'track' | 'page' | 'identify'`
 - `Platform`: `'web' | 'ios' | 'android' | 'server'`
-- `Environment`: `'dev' | 'staging' | 'prod'`
+- `Environment`: `'development' | 'staging' | 'production' | 'test'`
 - `SortOrder`: `'asc' | 'desc'`
+
+**Note:** The `test` environment is used internally for test fixtures and is not exposed in the public API contract.
 
 ### Shared Interfaces
 - `Source` - Application source metadata

@@ -19,8 +19,7 @@ export function detectCloudProvider(): CloudProvider | undefined {
     getOptionalEnvVar('SQS_QUEUE_URL');
 
   const hasAzureConfig =
-    getOptionalEnvVar('AZURE_COSMOS_ENDPOINT') &&
-    getOptionalEnvVar('AZURE_COSMOS_KEY') &&
+    getOptionalEnvVar('AZURE_COSMOS_CONNECTION_STRING') &&
     getOptionalEnvVar('AZURE_STORAGE_CONNECTION_STRING') &&
     getOptionalEnvVar('AZURE_QUEUE_NAME');
 
@@ -52,9 +51,11 @@ export function loadAwsConfig(): AwsConfig {
 
 export function loadAzureConfig(): AzureConfig {
   return {
-    cosmosEndpoint: getRequiredEnvVar('AZURE_COSMOS_ENDPOINT'),
-    cosmosKey: getRequiredEnvVar('AZURE_COSMOS_KEY'),
+    cosmosConnectionString: getRequiredEnvVar('AZURE_COSMOS_CONNECTION_STRING'),
+    cosmosDatabaseName: getRequiredEnvVar('AZURE_COSMOS_DATABASE_NAME'),
+    cosmosContainerName: getRequiredEnvVar('AZURE_COSMOS_CONTAINER_NAME'),
     storageConnectionString: getRequiredEnvVar('AZURE_STORAGE_CONNECTION_STRING'),
     queueName: getRequiredEnvVar('AZURE_QUEUE_NAME'),
+    blobContainerName: getRequiredEnvVar('AZURE_BLOB_CONTAINER_NAME'),
   };
 }

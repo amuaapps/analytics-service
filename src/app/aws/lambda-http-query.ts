@@ -46,6 +46,10 @@ function createSuccessResponse(result: {
 
 function createErrorResponse(error: unknown, statusCode: number = 500): APIGatewayProxyResult {
   const message = error instanceof Error ? error.message : 'Internal server error';
+  const code = statusCode === 400 ? 'VALIDATION_ERROR'
+    : statusCode === 401 ? 'AUTHENTICATION_ERROR'
+    : statusCode === 404 ? 'NOT_FOUND'
+    : 'INTERNAL_SERVER_ERROR';
 
   return {
     statusCode,
@@ -53,8 +57,10 @@ function createErrorResponse(error: unknown, statusCode: number = 500): APIGatew
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
-      error: statusCode === 400 ? 'Bad Request' : 'Internal Server Error',
-      message,
+      error: {
+        code,
+        message,
+      },
     }),
   };
 }
