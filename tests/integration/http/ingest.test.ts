@@ -31,6 +31,7 @@ describe('POST /api/v1/events - Integration', () => {
     app = createServer({
       logger,
       queueAdapter,
+      storageAdapter: {} as any, // Not used in ingest tests
       config,
     });
   });

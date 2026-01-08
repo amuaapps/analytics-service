@@ -1,11 +1,18 @@
 import type { Logger } from '../../utils/logger.js';
 import { createChildLogger } from '../../utils/index.js';
 import type { StoredEvent } from '../../domain/stored-event-types.js';
-import type { CoreProcessorRequest, CoreProcessorResponse, StorageAdapter } from './types.js';
+import { validateIngestRequestEnvelope } from '../../domain/validation.js';
+import type {
+  CoreProcessorRequest,
+  CoreProcessorResponse,
+  OperationalStorageAdapter,
+  RawStorageAdapter,
+} from './types.js';
 
 export interface ProcessorHandlerDependencies {
   logger: Logger;
-  storageAdapter: StorageAdapter;
+  operationalStorage: OperationalStorageAdapter;
+  rawStorage: RawStorageAdapter;
 }
 
 function transformToStoredEvent(
@@ -26,7 +33,7 @@ export async function handleProcessor(
   deps: ProcessorHandlerDependencies
 ): Promise<CoreProcessorResponse> {
   const { requestId, batchId, events } = request;
-  const { logger, storageAdapter } = deps;
+  const { logger, operationalStorage, rawStorage } = deps;
 
   const eventIds = events.map((e) => e.eventId);
 
@@ -39,32 +46,102 @@ export async function handleProcessor(
 
   batchLogger.info('Processing event batch');
 
-  const receivedAt = new Date().toISOString();
-  const processedAt = new Date().toISOString();
-
-  const storedEvents: StoredEvent[] = events.map((event) =>
-    transformToStoredEvent(event, { receivedAt, processedAt })
-  );
-
+  // Defensive validation - do not assume ingest validated
   try {
-    await storageAdapter.storeEvents(storedEvents);
-
-    batchLogger.info('Batch processed successfully');
-
-    return {
-      processed: events.length,
-      failed: 0,
-    };
+    validateIngestRequestEnvelope({ schemaVersion: '1.0.0', events });
   } catch (error) {
-    batchLogger.error({ err: error }, 'Failed to process batch');
-
+    batchLogger.error({ err: error }, 'Batch failed validation');
     return {
       processed: 0,
       failed: events.length,
       errors: events.map((event) => ({
         eventId: event.eventId,
-        error: error instanceof Error ? error.message : 'Unknown error',
+        error: error instanceof Error ? error.message : 'Validation failed',
       })),
     };
   }
+
+  const receivedAt = new Date().toISOString();
+  const processedAt = new Date().toISOString();
+
+  // Check for duplicates (idempotency)
+  const duplicateChecks = await Promise.allSettled(
+    events.map((event) => operationalStorage.checkEventExists(event.eventId))
+  );
+
+  const newEvents: typeof events = [];
+  const skippedEvents: Array<{ eventId: string; reason: string }> = [];
+
+  events.forEach((event, index) => {
+    const checkResult = duplicateChecks[index];
+    if (checkResult.status === 'fulfilled' && checkResult.value === true) {
+      skippedEvents.push({
+        eventId: event.eventId,
+        reason: 'Duplicate event (already processed)',
+      });
+      batchLogger.debug({ eventId: event.eventId }, 'Skipping duplicate event');
+    } else {
+      newEvents.push(event);
+    }
+  });
+
+  if (newEvents.length === 0) {
+    batchLogger.info('All events were duplicates, skipping batch');
+    return {
+      processed: 0,
+      failed: 0,
+    };
+  }
+
+  const storedEvents: StoredEvent[] = newEvents.map((event) =>
+    transformToStoredEvent(event, { receivedAt, processedAt })
+  );
+
+  const results = {
+    processed: 0,
+    failed: 0,
+    errors: [] as Array<{ eventId: string; error: string }>,
+  };
+
+  // Write to raw storage (immutable, always succeeds or throws)
+  try {
+    const rawBatch = {
+      batchId,
+      requestId,
+      receivedAt,
+      processedAt,
+      eventCount: newEvents.length,
+      events: newEvents,
+    };
+
+    await rawStorage.storeRawBatch(rawBatch);
+    batchLogger.debug('Raw batch stored successfully');
+  } catch (error) {
+    batchLogger.error({ err: error }, 'Failed to store raw batch');
+    // Raw storage failure is critical - fail the entire batch
+    return {
+      processed: 0,
+      failed: newEvents.length,
+      errors: newEvents.map((event) => ({
+        eventId: event.eventId,
+        error: error instanceof Error ? error.message : 'Raw storage failed',
+      })),
+    };
+  }
+
+  // Write to operational storage (queryable)
+  try {
+    await operationalStorage.storeEvents(storedEvents);
+    results.processed = newEvents.length;
+    batchLogger.info({ processed: results.processed }, 'Batch processed successfully');
+  } catch (error) {
+    batchLogger.error({ err: error }, 'Failed to store events in operational storage');
+    results.failed = newEvents.length;
+    results.errors = newEvents.map((event) => ({
+      eventId: event.eventId,
+      error: error instanceof Error ? error.message : 'Operational storage failed',
+    }));
+  }
+
+  return results;
 }

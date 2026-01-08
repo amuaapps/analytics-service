@@ -4,12 +4,14 @@ import { getOrGenerateRequestId } from '../../utils/correlation.js';
 import { createAuthMiddleware, parseWriteKeys } from '../middleware/auth.js';
 import { createValidationMiddleware } from '../middleware/validation.js';
 import { handleIngest } from '../core/ingest-handler.js';
-import type { QueueAdapter } from '../core/types.js';
+import type { QueueAdapter, OperationalStorageAdapter } from '../core/types.js';
 import type { Config } from '../../config/types.js';
+import { createQueryHttpHandler } from './query-handler.js';
 
 export interface ServerDependencies {
   logger: Logger;
   queueAdapter: QueueAdapter;
+  storageAdapter: OperationalStorageAdapter;
   config: Config;
 }
 
@@ -30,7 +32,7 @@ function corsMiddleware(config: Config) {
       res.setHeader('Access-Control-Allow-Origin', origin);
     }
 
-    res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-Analytics-Write-Key, X-Request-ID');
     res.setHeader('Access-Control-Max-Age', '86400');
 
@@ -63,7 +65,7 @@ function errorHandler(logger: Logger) {
 }
 
 export function createServer(deps: ServerDependencies): Express {
-  const { logger, queueAdapter, config } = deps;
+  const { logger, queueAdapter, storageAdapter, config } = deps;
   const app = express();
 
   app.use(express.json({ limit: config.limits.maxPayloadSizeBytes }));
@@ -73,6 +75,7 @@ export function createServer(deps: ServerDependencies): Express {
   const writeKeys = parseWriteKeys(config.security.analyticsWriteKey);
   const authMiddleware = createAuthMiddleware({ writeKeys }, logger);
   const validationMiddleware = createValidationMiddleware(logger);
+  const queryHandler = createQueryHttpHandler({ logger, storageAdapter });
 
   app.post(
     '/api/v1/events',
@@ -102,6 +105,8 @@ export function createServer(deps: ServerDependencies): Express {
         });
     }
   );
+
+  app.get('/api/v1/events', queryHandler);
 
   app.get('/health', (_req: Request, res: Response): void => {
     res.status(200).json({

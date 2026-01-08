@@ -200,3 +200,7 @@ export const VALIDATION_CONSTANTS = {
   EVENT_NAME_PATTERN,
   PROPERTY_KEY_PATTERN,
 } as const;
+
+export function validateIngestRequestEnvelope(data: unknown): void {
+  ingestRequestEnvelopeSchema.parse(data);
+}

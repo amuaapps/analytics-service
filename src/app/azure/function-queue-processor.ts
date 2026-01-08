@@ -1,11 +1,12 @@
 import type { InvocationContext } from '@azure/functions';
 import { handleProcessor } from '../core/processor-handler.js';
-import type { CoreProcessorRequest, StorageAdapter } from '../core/types.js';
+import type { CoreProcessorRequest, OperationalStorageAdapter, RawStorageAdapter } from '../core/types.js';
 import type { Logger } from '../../utils/logger.js';
 
 export interface AzureFunctionProcessorDependencies {
   logger: Logger;
-  storageAdapter: StorageAdapter;
+  operationalStorage: OperationalStorageAdapter;
+  rawStorage: RawStorageAdapter;
 }
 
 function parseQueueMessage(message: unknown): CoreProcessorRequest {
@@ -20,15 +21,16 @@ function parseQueueMessage(message: unknown): CoreProcessorRequest {
 }
 
 export function createAzureFunctionQueueProcessorHandler(deps: AzureFunctionProcessorDependencies) {
-  return async (queueItem: unknown, context: InvocationContext): Promise<void> => {
-    const { logger, storageAdapter } = deps;
+  return async (queueItem: unknown, _context: InvocationContext): Promise<void> => {
+    const { logger, operationalStorage, rawStorage } = deps;
 
     try {
       const coreRequest = parseQueueMessage(queueItem);
 
       const result = await handleProcessor(coreRequest, {
         logger,
-        storageAdapter,
+        operationalStorage,
+        rawStorage,
       });
 
       if (result.failed > 0) {
@@ -45,8 +47,8 @@ export function createAzureFunctionQueueProcessorHandler(deps: AzureFunctionProc
     } catch (error) {
       logger.error(
         {
-          err: error,
-          invocationId: context.invocationId,
+          error: error instanceof Error ? error.message : 'Unknown error',
+          requestId: 'unknown',
         },
         'Failed to process queue message'
       );

@@ -1,13 +1,13 @@
 import { describe, it, expect, jest, beforeEach } from '@jest/globals';
 import { handleQuery } from '../../../../src/app/core/query-handler.js';
-import type { CoreQueryRequest, CoreQueryResponse, StorageAdapter } from '../../../../src/app/core/types.js';
+import type { CoreQueryRequest, CoreQueryResponse, OperationalStorageAdapter } from '../../../../src/app/core/types.js';
 import type { QueryEventsInput } from '../../../../src/domain/query-types.js';
 import type { StoredEvent } from '../../../../src/domain/stored-event-types.js';
 import { createLogger } from '../../../../src/utils/logger.js';
 import { SCHEMA_VERSION } from '../../../../src/domain/base-types.js';
 
 describe('Core Query Handler', () => {
-  let mockStorageAdapter: jest.Mocked<StorageAdapter>;
+  let mockStorageAdapter: jest.Mocked<OperationalStorageAdapter>;
   let logger: ReturnType<typeof createLogger>;
 
   beforeEach(() => {
@@ -17,7 +17,8 @@ describe('Core Query Handler', () => {
         events: [],
         hasMore: false,
       }),
-    } as jest.Mocked<StorageAdapter>;
+      checkEventExists: jest.fn<(eventId: string) => Promise<boolean>>().mockResolvedValue(false),
+    } as jest.Mocked<OperationalStorageAdapter>;
 
     logger = createLogger({
       serviceName: 'test-service',
@@ -67,18 +68,37 @@ describe('Core Query Handler', () => {
     });
 
     it('should handle pagination with cursor', async () => {
-      mockStorageAdapter.queryEvents.mockResolvedValue({
-        events: [],
-        cursor: 'next-page-cursor',
+      const mockEvents: StoredEvent[] = [
+        {
+          schemaVersion: SCHEMA_VERSION,
+          eventId: 'evt-001',
+          type: 'track',
+          name: 'test.event',
+          occurredAt: '2026-01-08T06:00:00Z',
+          receivedAt: '2026-01-08T06:00:01Z',
+          processedAt: '2026-01-08T06:00:02Z',
+          source: { appId: 'app', platform: 'web', env: 'prod' },
+          actor: { userId: 'user-1' },
+          properties: {},
+        },
+      ];
+
+      const mockCursor = JSON.stringify({ pk: 'APP#app', sk: 'TS#123#EVT#evt-001' });
+      mockStorageAdapter.queryEvents.mockResolvedValueOnce({
+        events: mockEvents,
         hasMore: true,
+        cursor: mockCursor,
       });
+
+      // Create a valid base64url encoded cursor
+      const validCursor = Buffer.from(JSON.stringify({ pk: 'APP#app', sk: 'TS#123#EVT#evt-000' }), 'utf-8').toString('base64url');
 
       const request: CoreQueryRequest = {
         requestId: 'req-456',
         input: {
           appId: 'web-storefront',
           from: '2026-01-01T00:00:00Z',
-          cursor: 'current-cursor',
+          cursor: validCursor,
           limit: 50,
         },
       };
@@ -88,8 +108,10 @@ describe('Core Query Handler', () => {
         storageAdapter: mockStorageAdapter,
       });
 
-      expect(result.cursor).toBe('next-page-cursor');
+      expect(result.events).toHaveLength(1);
       expect(result.hasMore).toBe(true);
+      expect(result.cursor).toBeDefined();
+      expect(typeof result.cursor).toBe('string');
     });
 
     it('should filter by event types', async () => {

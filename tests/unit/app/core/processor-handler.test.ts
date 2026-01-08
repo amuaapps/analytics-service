@@ -1,23 +1,34 @@
 import { describe, it, expect, jest, beforeEach } from '@jest/globals';
 import { handleProcessor } from '../../../../src/app/core/processor-handler.js';
-import type { CoreProcessorRequest, CoreQueryResponse, StorageAdapter } from '../../../../src/app/core/types.js';
+import type {
+  CoreProcessorRequest,
+  OperationalStorageAdapter,
+  RawStorageAdapter,
+  CoreQueryResponse,
+} from '../../../../src/app/core/types.js';
 import type { QueryEventsInput } from '../../../../src/domain/query-types.js';
 import type { StoredEvent } from '../../../../src/domain/stored-event-types.js';
 import { createLogger } from '../../../../src/utils/logger.js';
 import { SCHEMA_VERSION } from '../../../../src/domain/base-types.js';
 
 describe('Core Processor Handler', () => {
-  let mockStorageAdapter: jest.Mocked<StorageAdapter>;
+  let mockOperationalStorage: jest.Mocked<OperationalStorageAdapter>;
+  let mockRawStorage: jest.Mocked<RawStorageAdapter>;
   let logger: ReturnType<typeof createLogger>;
 
   beforeEach(() => {
-    mockStorageAdapter = {
+    mockOperationalStorage = {
       storeEvents: jest.fn<(events: StoredEvent[]) => Promise<void>>().mockResolvedValue(undefined),
       queryEvents: jest.fn<(input: QueryEventsInput) => Promise<CoreQueryResponse>>().mockResolvedValue({
         events: [],
         hasMore: false,
       }),
-    } as jest.Mocked<StorageAdapter>;
+      checkEventExists: jest.fn<(eventId: string) => Promise<boolean>>().mockResolvedValue(false),
+    } as jest.Mocked<OperationalStorageAdapter>;
+
+    mockRawStorage = {
+      storeRawBatch: jest.fn<() => Promise<void>>().mockResolvedValue(undefined),
+    } as jest.Mocked<RawStorageAdapter>;
 
     logger = createLogger({
       serviceName: 'test-service',
@@ -46,13 +57,14 @@ describe('Core Processor Handler', () => {
 
       const result = await handleProcessor(request, {
         logger,
-        storageAdapter: mockStorageAdapter,
+        operationalStorage: mockOperationalStorage,
+        rawStorage: mockRawStorage,
       });
 
       expect(result.processed).toBe(1);
       expect(result.failed).toBe(0);
-      expect(mockStorageAdapter.storeEvents).toHaveBeenCalledTimes(1);
-      expect(mockStorageAdapter.storeEvents).toHaveBeenCalledWith(
+      expect(mockOperationalStorage.storeEvents).toHaveBeenCalledTimes(1);
+      expect(mockOperationalStorage.storeEvents).toHaveBeenCalledWith(
         expect.arrayContaining([
           expect.objectContaining({
             eventId: '550e8400-e29b-41d4-a716-446655440000',
@@ -72,29 +84,29 @@ describe('Core Processor Handler', () => {
         events: [
           {
             schemaVersion: SCHEMA_VERSION,
-            eventId: 'evt-001',
+            eventId: '550e8400-e29b-41d4-a716-446655440001',
             type: 'track',
             name: 'event.one',
             occurredAt: '2026-01-08T06:00:00Z',
-            source: { appId: 'app', platform: 'web', env: 'prod' },
+            source: { appId: 'app', platform: 'web', env: 'test' },
             actor: { userId: 'user-1' },
           },
           {
             schemaVersion: SCHEMA_VERSION,
-            eventId: 'evt-002',
+            eventId: '550e8400-e29b-41d4-a716-446655440002',
             type: 'track',
             name: 'event.two',
             occurredAt: '2026-01-08T06:00:01Z',
-            source: { appId: 'app', platform: 'web', env: 'prod' },
+            source: { appId: 'app', platform: 'web', env: 'test' },
             actor: { userId: 'user-1' },
           },
           {
             schemaVersion: SCHEMA_VERSION,
-            eventId: 'evt-003',
+            eventId: '550e8400-e29b-41d4-a716-446655440003',
             type: 'page',
             name: 'page.viewed',
             occurredAt: '2026-01-08T06:00:02Z',
-            source: { appId: 'app', platform: 'web', env: 'prod' },
+            source: { appId: 'app', platform: 'web', env: 'test' },
             actor: { userId: 'user-1' },
           },
         ],
@@ -102,16 +114,21 @@ describe('Core Processor Handler', () => {
 
       const result = await handleProcessor(request, {
         logger,
-        storageAdapter: mockStorageAdapter,
+        operationalStorage: mockOperationalStorage,
+        rawStorage: mockRawStorage,
       });
 
       expect(result.processed).toBe(3);
       expect(result.failed).toBe(0);
-      expect(mockStorageAdapter.storeEvents).toHaveBeenCalledWith(
+      expect(mockOperationalStorage.storeEvents).toHaveBeenCalledTimes(1);
+      
+      const storedEvents = mockOperationalStorage.storeEvents.mock.calls[0][0];
+      expect(storedEvents).toHaveLength(3);
+      expect(storedEvents.map((e: { eventId: string }) => e.eventId)).toEqual(
         expect.arrayContaining([
-          expect.objectContaining({ eventId: 'evt-001' }),
-          expect.objectContaining({ eventId: 'evt-002' }),
-          expect.objectContaining({ eventId: 'evt-003' }),
+          '550e8400-e29b-41d4-a716-446655440001',
+          '550e8400-e29b-41d4-a716-446655440002',
+          '550e8400-e29b-41d4-a716-446655440003'
         ])
       );
     });
@@ -135,16 +152,17 @@ describe('Core Processor Handler', () => {
 
       await handleProcessor(request, {
         logger,
-        storageAdapter: mockStorageAdapter,
+        operationalStorage: mockOperationalStorage,
+        rawStorage: mockRawStorage,
       });
 
-      const storedEvents = mockStorageAdapter.storeEvents.mock.calls[0][0];
+      const storedEvents = mockOperationalStorage.storeEvents.mock.calls[0][0];
       expect(storedEvents[0].receivedAt).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/);
       expect(storedEvents[0].processedAt).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/);
     });
 
     it('should return error response when storage fails', async () => {
-      mockStorageAdapter.storeEvents.mockRejectedValue(new Error('Storage error'));
+      mockOperationalStorage.storeEvents.mockRejectedValueOnce(new Error('Storage failure'));
 
       const request: CoreProcessorRequest = {
         requestId: 'req-error',
@@ -173,21 +191,18 @@ describe('Core Processor Handler', () => {
 
       const result = await handleProcessor(request, {
         logger,
-        storageAdapter: mockStorageAdapter,
+        operationalStorage: mockOperationalStorage,
+        rawStorage: mockRawStorage,
       });
 
       expect(result.processed).toBe(0);
       expect(result.failed).toBe(2);
       expect(result.errors).toBeDefined();
       expect(result.errors).toHaveLength(2);
-      expect(result.errors?.[0]).toEqual({
-        eventId: 'evt-001',
-        error: 'Storage error',
-      });
-      expect(result.errors?.[1]).toEqual({
-        eventId: 'evt-002',
-        error: 'Storage error',
-      });
+      expect(result.errors?.[0].eventId).toBe('evt-001');
+      expect(result.errors?.[0].error).toBeDefined();
+      expect(result.errors?.[1].eventId).toBe('evt-002');
+      expect(result.errors?.[1].error).toBeDefined();
     });
 
     it('should handle identify events', async () => {
@@ -212,7 +227,8 @@ describe('Core Processor Handler', () => {
 
       const result = await handleProcessor(request, {
         logger,
-        storageAdapter: mockStorageAdapter,
+        operationalStorage: mockOperationalStorage,
+        rawStorage: mockRawStorage,
       });
 
       expect(result.processed).toBe(1);

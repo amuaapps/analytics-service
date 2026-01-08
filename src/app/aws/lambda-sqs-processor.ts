@@ -1,11 +1,12 @@
 import type { SQSEvent, SQSRecord, Context } from 'aws-lambda';
 import { handleProcessor } from '../core/processor-handler.js';
-import type { CoreProcessorRequest, StorageAdapter } from '../core/types.js';
+import type { CoreProcessorRequest, OperationalStorageAdapter, RawStorageAdapter } from '../core/types.js';
 import type { Logger } from '../../utils/logger.js';
 
 export interface LambdaProcessorDependencies {
   logger: Logger;
-  storageAdapter: StorageAdapter;
+  operationalStorage: OperationalStorageAdapter;
+  rawStorage: RawStorageAdapter;
 }
 
 function parseSQSMessage(record: SQSRecord): CoreProcessorRequest {
@@ -19,16 +20,24 @@ function parseSQSMessage(record: SQSRecord): CoreProcessorRequest {
 
 export function createLambdaSQSProcessorHandler(deps: LambdaProcessorDependencies) {
   return async (event: SQSEvent, context: Context): Promise<void> => {
-    const { logger, storageAdapter } = deps;
+    const { logger, operationalStorage, rawStorage } = deps;
 
     for (const record of event.Records) {
       try {
         const coreRequest = parseSQSMessage(record);
 
-        const result = await handleProcessor(coreRequest, {
-          logger,
-          storageAdapter,
-        });
+        const result = await handleProcessor(
+          {
+            requestId: coreRequest.requestId,
+            batchId: coreRequest.batchId,
+            events: coreRequest.events,
+          },
+          {
+            logger,
+            operationalStorage,
+            rawStorage,
+          }
+        );
 
         if (result.failed > 0) {
           logger.error(

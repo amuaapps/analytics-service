@@ -36,11 +36,25 @@ export interface CoreProcessorResponse {
   errors?: Array<{ eventId: string; error: string }>;
 }
 
+/**
+ * QueueAdapter interface for message enqueueing
+ */
 export interface QueueAdapter {
-  enqueue(message: CoreProcessorRequest): Promise<void>;
+  enqueue(message: { requestId: string; batchId: string; events: IngestRequestEnvelope['events'] }): Promise<void>;
 }
 
-export interface StorageAdapter {
+/**
+ * OperationalStorageAdapter interface for queryable storage
+ */
+export interface OperationalStorageAdapter {
   storeEvents(events: StoredEvent[]): Promise<void>;
   queryEvents(input: QueryEventsInput): Promise<CoreQueryResponse>;
+  checkEventExists(eventId: string): Promise<boolean>;
+}
+
+/**
+ * RawStorageAdapter interface for immutable storage
+ */
+export interface RawStorageAdapter {
+  storeRawBatch(batch: { batchId: string; requestId: string; receivedAt: string; events: IngestRequestEnvelope['events'] }): Promise<void>;
 }
