@@ -17,7 +17,7 @@ resource "aws_lambda_function" "ingest" {
   filename         = data.archive_file.lambda_placeholder.output_path
   function_name    = "${var.project_name}-ingest-${var.environment}"
   role             = aws_iam_role.ingest_lambda.arn
-  handler          = "index.handler"
+  handler          = "app/aws/entrypoints.ingestHandler"
   source_code_hash = data.archive_file.lambda_placeholder.output_base64sha256
   runtime          = var.lambda_runtime
   memory_size      = var.lambda_memory_size
@@ -66,7 +66,7 @@ resource "aws_lambda_function" "query" {
   filename         = data.archive_file.lambda_placeholder.output_path
   function_name    = "${var.project_name}-query-${var.environment}"
   role             = aws_iam_role.query_lambda.arn
-  handler          = "index.handler"
+  handler          = "app/aws/entrypoints.queryHandler"
   source_code_hash = data.archive_file.lambda_placeholder.output_base64sha256
   runtime          = var.lambda_runtime
   memory_size      = var.lambda_memory_size
@@ -112,7 +112,7 @@ resource "aws_lambda_function" "processor" {
   filename         = data.archive_file.lambda_placeholder.output_path
   function_name    = "${var.project_name}-processor-${var.environment}"
   role             = aws_iam_role.processor_lambda.arn
-  handler          = "index.handler"
+  handler          = "app/aws/entrypoints.processorHandler"
   source_code_hash = data.archive_file.lambda_placeholder.output_base64sha256
   runtime          = var.lambda_runtime
   memory_size      = var.lambda_memory_size

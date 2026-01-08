@@ -269,7 +269,9 @@ jobs:
       ingest_function: ${{ steps.deploy.outputs.ingest_function }}
       query_function: ${{ steps.deploy.outputs.query_function }}
       processor_function: ${{ steps.deploy.outputs.processor_function }}
-      new_version: ${{ steps.deploy.outputs.new_version }}
+      ingest_version: ${{ steps.deploy.outputs.ingest_version }}
+      query_version: ${{ steps.deploy.outputs.query_version }}
+      processor_version: ${{ steps.deploy.outputs.processor_version }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -360,17 +362,25 @@ jobs:
             --region ${AWS_REGION} \
             --publish > /tmp/processor-version.json
           
-          # Extract version numbers
+          # Extract version numbers for each function
           INGEST_VERSION=$(jq -r '.Version' /tmp/ingest-version.json)
           QUERY_VERSION=$(jq -r '.Version' /tmp/query-version.json)
           PROCESSOR_VERSION=$(jq -r '.Version' /tmp/processor-version.json)
           
+          # Output function names
           echo "ingest_function=${PROJECT_NAME}-ingest-${ENVIRONMENT}" >> $GITHUB_OUTPUT
           echo "query_function=${PROJECT_NAME}-query-${ENVIRONMENT}" >> $GITHUB_OUTPUT
           echo "processor_function=${PROJECT_NAME}-processor-${ENVIRONMENT}" >> $GITHUB_OUTPUT
-          echo "new_version=$INGEST_VERSION" >> $GITHUB_OUTPUT
           
-          echo "Deployed versions: Ingest=$INGEST_VERSION, Query=$QUERY_VERSION, Processor=$PROCESSOR_VERSION"
+          # Output individual versions for each function
+          echo "ingest_version=$INGEST_VERSION" >> $GITHUB_OUTPUT
+          echo "query_version=$QUERY_VERSION" >> $GITHUB_OUTPUT
+          echo "processor_version=$PROCESSOR_VERSION" >> $GITHUB_OUTPUT
+          
+          echo "✅ Deployed versions:"
+          echo "  Ingest: $INGEST_VERSION"
+          echo "  Query: $QUERY_VERSION"
+          echo "  Processor: $PROCESSOR_VERSION"
           echo "Region: ${AWS_REGION}"
           echo "Note: Live alias still points to previous version (BLUE)"
 
@@ -493,28 +503,109 @@ jobs:
         id: switch
         env:
           AWS_REGION: ${{ vars.AWS_REGION || 'us-east-1' }}
+          INGEST_FUNCTION: ${{ needs.deploy-aws-green.outputs.ingest_function }}
+          QUERY_FUNCTION: ${{ needs.deploy-aws-green.outputs.query_function }}
+          PROCESSOR_FUNCTION: ${{ needs.deploy-aws-green.outputs.processor_function }}
+          INGEST_VERSION: ${{ needs.deploy-aws-green.outputs.ingest_version }}
+          QUERY_VERSION: ${{ needs.deploy-aws-green.outputs.query_version }}
+          PROCESSOR_VERSION: ${{ needs.deploy-aws-green.outputs.processor_version }}
         run: |
-          # Update live alias to point to new version
-          aws lambda update-alias \
-            --function-name ${{ needs.deploy-aws-green.outputs.ingest_function }} \
-            --name live \
-            --function-version ${{ needs.deploy-aws-green.outputs.new_version }} \
-            --region ${AWS_REGION}
+          # Update live alias to point to each function's specific version
+          echo "Updating aliases to GREEN versions..."
           
           aws lambda update-alias \
-            --function-name ${{ needs.deploy-aws-green.outputs.query_function }} \
+            --function-name ${INGEST_FUNCTION} \
             --name live \
-            --function-version ${{ needs.deploy-aws-green.outputs.new_version }} \
+            --function-version ${INGEST_VERSION} \
             --region ${AWS_REGION}
+          echo "✅ Ingest alias updated to version ${INGEST_VERSION}"
           
           aws lambda update-alias \
-            --function-name ${{ needs.deploy-aws-green.outputs.processor_function }} \
+            --function-name ${QUERY_FUNCTION} \
             --name live \
-            --function-version ${{ needs.deploy-aws-green.outputs.new_version }} \
+            --function-version ${QUERY_VERSION} \
             --region ${AWS_REGION}
+          echo "✅ Query alias updated to version ${QUERY_VERSION}"
           
-          echo "✅ Traffic switched to GREEN (version ${{ needs.deploy-aws-green.outputs.new_version }})"
+          aws lambda update-alias \
+            --function-name ${PROCESSOR_FUNCTION} \
+            --name live \
+            --function-version ${PROCESSOR_VERSION} \
+            --region ${AWS_REGION}
+          echo "✅ Processor alias updated to version ${PROCESSOR_VERSION}"
+          
+          echo ""
+          echo "✅ Traffic switched to GREEN"
+          echo "  Ingest: version ${INGEST_VERSION}"
+          echo "  Query: version ${QUERY_VERSION}"
+          echo "  Processor: version ${PROCESSOR_VERSION}"
           echo "Region: ${AWS_REGION}"
+
+      - name: Verify alias versions (sanity check)
+        env:
+          AWS_REGION: ${{ vars.AWS_REGION || 'us-east-1' }}
+          INGEST_FUNCTION: ${{ needs.deploy-aws-green.outputs.ingest_function }}
+          QUERY_FUNCTION: ${{ needs.deploy-aws-green.outputs.query_function }}
+          PROCESSOR_FUNCTION: ${{ needs.deploy-aws-green.outputs.processor_function }}
+          EXPECTED_INGEST_VERSION: ${{ needs.deploy-aws-green.outputs.ingest_version }}
+          EXPECTED_QUERY_VERSION: ${{ needs.deploy-aws-green.outputs.query_version }}
+          EXPECTED_PROCESSOR_VERSION: ${{ needs.deploy-aws-green.outputs.processor_version }}
+        run: |
+          echo "Verifying alias versions..."
+          
+          # Get actual versions from aliases
+          ACTUAL_INGEST=$(aws lambda get-alias \
+            --function-name ${INGEST_FUNCTION} \
+            --name live \
+            --region ${AWS_REGION} \
+            --query 'FunctionVersion' \
+            --output text)
+          
+          ACTUAL_QUERY=$(aws lambda get-alias \
+            --function-name ${QUERY_FUNCTION} \
+            --name live \
+            --region ${AWS_REGION} \
+            --query 'FunctionVersion' \
+            --output text)
+          
+          ACTUAL_PROCESSOR=$(aws lambda get-alias \
+            --function-name ${PROCESSOR_FUNCTION} \
+            --name live \
+            --region ${AWS_REGION} \
+            --query 'FunctionVersion' \
+            --output text)
+          
+          # Verify versions match
+          echo "Expected vs Actual:"
+          echo "  Ingest: ${EXPECTED_INGEST_VERSION} vs ${ACTUAL_INGEST}"
+          echo "  Query: ${EXPECTED_QUERY_VERSION} vs ${ACTUAL_QUERY}"
+          echo "  Processor: ${EXPECTED_PROCESSOR_VERSION} vs ${ACTUAL_PROCESSOR}"
+          
+          # Check if versions match
+          ERRORS=0
+          if [ "${ACTUAL_INGEST}" != "${EXPECTED_INGEST_VERSION}" ]; then
+            echo "❌ ERROR: Ingest alias version mismatch!"
+            ERRORS=$((ERRORS + 1))
+          fi
+          
+          if [ "${ACTUAL_QUERY}" != "${EXPECTED_QUERY_VERSION}" ]; then
+            echo "❌ ERROR: Query alias version mismatch!"
+            ERRORS=$((ERRORS + 1))
+          fi
+          
+          if [ "${ACTUAL_PROCESSOR}" != "${EXPECTED_PROCESSOR_VERSION}" ]; then
+            echo "❌ ERROR: Processor alias version mismatch!"
+            ERRORS=$((ERRORS + 1))
+          fi
+          
+          if [ ${ERRORS} -gt 0 ]; then
+            echo ""
+            echo "❌ Sanity check failed: ${ERRORS} alias(es) pointing to wrong version"
+            exit 1
+          fi
+          
+          echo ""
+          echo "✅ Sanity check passed: All aliases point to correct versions"
 
       - name: Rollback on failure
         if: failure()
