@@ -1114,6 +1114,7 @@ See [docs/agents.md](docs/agents.md) for detailed coding standards.
 - **[Quick Start Guide](docs/QUICK_START.md)** - Get running in 2 minutes
 - **[Local Development Guide](docs/LOCAL_DEVELOPMENT.md)** - Complete local dev setup
 - **[Deployment Guide](.github/DEPLOYMENT.md)** - Deploy to AWS or Azure
+- **[Dependency Management](docs/DEPENDENCY_MANAGEMENT.md)** - Lockfiles and deterministic builds
 - **[API Specification](docs/analytics-service-spec-v1.0.0.md)** - API contracts and storage model
 - **[Coding Standards](docs/agents.md)** - Amua Apps coding standards
 

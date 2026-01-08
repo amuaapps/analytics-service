@@ -1,6 +1,6 @@
 # Dependencies
 node_modules/
-package-lock.json
+# package-lock.json is committed for deterministic builds (npm ci)
 yarn.lock
 
 # Build output
@@ -43,7 +43,7 @@ temp/
 
 # Terraform
 infra/aws/.terraform/
-infra/aws/.terraform.lock.hcl
+# .terraform.lock.hcl is committed for deterministic provider versions
 infra/aws/terraform.tfstate
 infra/aws/terraform.tfstate.backup
 infra/aws/*.tfvars
