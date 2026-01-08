@@ -6,15 +6,21 @@
   "type": "module",
   "scripts": {
     "build": "tsc",
+    "dev": "NODE_OPTIONS='--loader ts-node/esm' node src/local-server.ts",
+    "dev:watch": "NODE_OPTIONS='--loader ts-node/esm' nodemon --watch src --ext ts --exec node src/local-server.ts",
+    "test": "NODE_OPTIONS=--experimental-vm-modules jest",
+    "test:watch": "NODE_OPTIONS=--experimental-vm-modules jest --watch",
+    "test:coverage": "NODE_OPTIONS=--experimental-vm-modules jest --coverage",
+    "test:unit": "NODE_OPTIONS=--experimental-vm-modules jest tests/unit",
+    "test:integration": "NODE_OPTIONS=--experimental-vm-modules jest tests/integration --testPathIgnorePatterns=post-deploy",
+    "test:post-deploy": "NODE_OPTIONS=--experimental-vm-modules jest tests/integration/post-deploy",
     "lint": "eslint . --ext .ts",
-    "typecheck": "tsc --noEmit",
+    "lint:fix": "eslint . --ext .ts --fix",
     "format": "prettier --write \"src/**/*.ts\" \"tests/**/*.ts\"",
     "format:check": "prettier --check \"src/**/*.ts\" \"tests/**/*.ts\"",
-    "test": "NODE_OPTIONS=--experimental-vm-modules jest",
-    "test:unit": "NODE_OPTIONS=--experimental-vm-modules jest tests/unit",
-    "test:integration": "NODE_OPTIONS=--experimental-vm-modules jest tests/integration",
-    "test:coverage": "NODE_OPTIONS=--experimental-vm-modules jest --coverage",
-    "prepare": "husky install"
+    "typecheck": "tsc --noEmit",
+    "validate": "npm run typecheck && npm run lint && npm test",
+    "prepare": "husky install || true"
   },
   "keywords": [
     "analytics",

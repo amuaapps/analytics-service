@@ -58,9 +58,12 @@ export function createValidationMiddleware(logger: Logger) {
         );
 
         res.status(400).json({
-          error: 'Bad Request',
-          message: 'Invalid request payload',
-          details: sanitizedErrors,
+          error: {
+            code: 'VALIDATION_ERROR',
+            message: 'Invalid request payload',
+            details: sanitizedErrors,
+          },
+          requestId,
         });
         return;
       }

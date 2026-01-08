@@ -259,10 +259,9 @@ describe('POST /api/v1/events - Integration', () => {
         .send(payload)
         .expect(401);
 
-      expect(response.body).toEqual({
-        error: 'Unauthorized',
-        message: 'Invalid X-Analytics-Write-Key',
-      });
+      expect(response.body).toHaveProperty('error');
+      expect(response.body.error.code).toBe('AUTHENTICATION_ERROR');
+      expect(response.body).toHaveProperty('requestId');
 
       expect(queueAdapter.size()).toBe(0);
     });
@@ -291,9 +290,9 @@ describe('POST /api/v1/events - Integration', () => {
         .send(payload)
         .expect(400);
 
-      expect(response.body).toHaveProperty('error', 'Bad Request');
-      expect(response.body).toHaveProperty('message', 'Invalid request payload');
-      expect(response.body).toHaveProperty('details');
+      expect(response.body).toHaveProperty('error');
+      expect(response.body.error.code).toBe('VALIDATION_ERROR');
+      expect(response.body).toHaveProperty('requestId');
 
       expect(queueAdapter.size()).toBe(0);
     });
@@ -320,7 +319,9 @@ describe('POST /api/v1/events - Integration', () => {
         .send(payload)
         .expect(400);
 
-      expect(response.body).toHaveProperty('error', 'Bad Request');
+      expect(response.body).toHaveProperty('error');
+      expect(response.body.error.code).toBe('VALIDATION_ERROR');
+      expect(response.body).toHaveProperty('requestId');
       expect(queueAdapter.size()).toBe(0);
     });
 

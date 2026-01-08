@@ -167,10 +167,14 @@ describe('Authentication Middleware', () => {
       middleware(mockReq as Request, mockRes as Response, mockNext);
 
       expect(statusMock).toHaveBeenCalledWith(401);
-      expect(jsonMock).toHaveBeenCalledWith({
-        error: 'Unauthorized',
-        message: 'Missing X-Analytics-Write-Key header',
-      });
+      expect(jsonMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          error: expect.objectContaining({
+            code: 'AUTHENTICATION_ERROR',
+          }),
+          requestId: expect.any(String),
+        })
+      );
       expect(mockNext).not.toHaveBeenCalled();
     });
 

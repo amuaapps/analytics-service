@@ -1,0 +1,24 @@
+# Parameter files with secrets
+parameters.*.json
+!parameters.dev.json.example
+
+# Local environment files
+.env
+.env.local
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Azure CLI
+.azure/
+
+# Bicep build artifacts
+*.json.backup

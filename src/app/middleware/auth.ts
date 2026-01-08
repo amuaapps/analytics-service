@@ -1,15 +1,9 @@
 import type { Request, Response, NextFunction } from 'express';
 import type { Logger } from '../../utils/logger.js';
+import { AuthenticationError, sendErrorResponse } from '../http/errors.js';
 
 export interface AuthConfig {
   writeKeys: string[];
-}
-
-export class AuthenticationError extends Error {
-  constructor(message: string) {
-    super(message);
-    this.name = 'AuthenticationError';
-  }
 }
 
 export function parseWriteKeys(writeKeyConfig: string): string[] {
@@ -44,38 +38,22 @@ export function validateWriteKey(providedKey: string, validKeys: string[]): bool
 export function createAuthMiddleware(config: AuthConfig, logger: Logger) {
   return (req: Request, res: Response, next: NextFunction): void => {
     const writeKey = req.headers['x-analytics-write-key'];
-    const requestId = req.id ?? 'unknown';
+    const requestId = req.id || 'unknown';
 
-    if (!writeKey) {
-      logger.warn({ requestId }, 'Missing X-Analytics-Write-Key header');
-      res.status(401).json({
-        error: 'Unauthorized',
-        message: 'Missing X-Analytics-Write-Key header',
-      });
-      return;
-    }
-
-    if (typeof writeKey !== 'string') {
-      logger.warn({ requestId }, 'Invalid X-Analytics-Write-Key header format');
-      res.status(401).json({
-        error: 'Unauthorized',
-        message: 'Invalid X-Analytics-Write-Key header format',
-      });
+    if (!writeKey || typeof writeKey !== 'string') {
+      const error = new AuthenticationError('Missing or invalid write key');
+      sendErrorResponse(res, error, logger, requestId);
       return;
     }
 
     const isValid = validateWriteKey(writeKey, config.writeKeys);
 
     if (!isValid) {
-      logger.warn({ requestId }, 'Invalid X-Analytics-Write-Key');
-      res.status(401).json({
-        error: 'Unauthorized',
-        message: 'Invalid X-Analytics-Write-Key',
-      });
+      const error = new AuthenticationError('Invalid write key');
+      sendErrorResponse(res, error, logger, requestId);
       return;
     }
 
-    logger.debug({ requestId }, 'Authentication successful');
     next();
   };
 }

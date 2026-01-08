@@ -5,6 +5,7 @@ import { validateQueryEventsInput } from '../../domain/query-validation.js';
 import { handleQuery } from '../core/query-handler.js';
 import type { OperationalStorageAdapter } from '../core/types.js';
 import type { StoredEvent } from '../../domain/stored-event-types.js';
+import { sendErrorResponse, ValidationError, isZodError, sanitizeZodError } from './errors.js';
 
 export interface QueryHttpHandlerDependencies {
   logger: Logger;
@@ -81,37 +82,27 @@ export function createQueryHttpHandler(deps: QueryHttpHandlerDependencies) {
 
       res.status(200).json(response);
     } catch (error) {
-      if (error instanceof Error && error.name === 'ZodError') {
-        requestLogger.warn({ error: error.message }, 'Query validation failed');
-        res.status(400).json({
-          error: 'Validation error',
-          message: error.message,
-        });
+      // Handle Zod validation errors
+      if (error instanceof Error && isZodError(error)) {
+        const validationError = sanitizeZodError(error);
+        sendErrorResponse(res, validationError, requestLogger, requestId);
         return;
       }
 
-      // Handle invalid cursor errors as 400
+      // Handle invalid cursor errors as validation errors
       if (error instanceof Error && error.message.includes('Invalid')) {
-        requestLogger.warn({ error: error.message }, 'Invalid request parameter');
-        res.status(400).json({
-          error: 'Bad request',
-          message: error.message,
-        });
+        const validationError = new ValidationError(error.message);
+        sendErrorResponse(res, validationError, requestLogger, requestId);
         return;
       }
 
-      requestLogger.error(
-        {
-          error: error instanceof Error ? error.message : 'Unknown error',
-          stack: error instanceof Error ? error.stack : undefined,
-        },
-        'Query failed'
+      // Handle all other errors as internal server errors
+      sendErrorResponse(
+        res,
+        error instanceof Error ? error : new Error('Unknown error'),
+        requestLogger,
+        requestId
       );
-
-      res.status(500).json({
-        error: 'Internal server error',
-        message: 'Failed to query events',
-      });
     }
   };
 }

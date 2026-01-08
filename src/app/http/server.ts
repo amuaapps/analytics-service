@@ -47,19 +47,27 @@ function corsMiddleware(config: Config) {
 
 function errorHandler(logger: Logger) {
   return (err: Error, req: Request, res: Response, _next: NextFunction): void => {
+    const requestId = req.id || 'unknown';
+
+    // Log with full details server-side
     logger.error(
       {
         err,
-        requestId: req.id,
+        requestId,
         method: req.method,
         path: req.path,
+        stack: err.stack,
       },
       'Unhandled error in request'
     );
 
+    // Send sanitized error to client (no stack traces)
     res.status(500).json({
-      error: 'Internal Server Error',
-      message: 'An unexpected error occurred',
+      error: {
+        code: 'INTERNAL_SERVER_ERROR',
+        message: 'An unexpected error occurred',
+      },
+      requestId,
     });
   };
 }

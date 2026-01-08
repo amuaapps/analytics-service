@@ -1,0 +1,42 @@
+# Example Terraform Variables
+# Copy this file to terraform.tfvars and update with your values
+
+# Required Variables
+environment         = "dev"
+aws_region         = "us-east-1"
+project_name       = "analytics-service"
+analytics_write_key = "your-secret-write-key-here"
+
+# Optional: CORS Configuration
+cors_allowed_origins = "https://example.com,https://app.example.com"
+
+# Optional: Logging
+log_level = "info"
+
+# Optional: DynamoDB Configuration
+dynamodb_billing_mode   = "PAY_PER_REQUEST"  # or "PROVISIONED"
+# dynamodb_read_capacity  = 5  # Only for PROVISIONED mode
+# dynamodb_write_capacity = 5  # Only for PROVISIONED mode
+event_retention_days    = 90
+
+# Optional: S3 Configuration
+raw_event_retention_days   = 365
+raw_event_transition_days  = 90
+
+# Optional: Lambda Configuration
+lambda_memory_size = 512
+lambda_timeout     = 30
+lambda_runtime     = "nodejs20.x"
+
+# Optional: SQS Configuration
+sqs_visibility_timeout = 300
+sqs_message_retention  = 1209600  # 14 days
+sqs_max_receive_count  = 3
+
+# Optional: CloudWatch Configuration
+log_retention_days = 30
+
+# Optional: Request Limits
+max_payload_size_bytes = 1048576  # 1MB
+max_events_per_batch   = 100
+max_query_limit        = 200

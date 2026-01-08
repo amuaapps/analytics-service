@@ -92,7 +92,7 @@ describe('Query API Integration Tests', () => {
 
       expect(response.status).toBe(400);
       expect(response.body).toHaveProperty('error');
-      expect(response.body.message).toContain('31 days');
+      expect(response.body.error.code).toBe('VALIDATION_ERROR');
     });
 
     it('should return 400 when to is before from', async () => {
@@ -119,7 +119,7 @@ describe('Query API Integration Tests', () => {
 
       expect(response.status).toBe(400);
       expect(response.body).toHaveProperty('error');
-      expect(response.body.message).toContain('200');
+      expect(response.body.error.code).toBe('VALIDATION_ERROR');
     });
 
     it('should return empty results when no events exist', async () => {

@@ -1,19 +1,16 @@
 # Analytics Service
 
-A serverless microservice for collecting, processing, and querying analytics events. Built with TypeScript following MACH principles, supporting both AWS and Azure deployments.
+A cloud-native, serverless analytics event ingestion and query service built with TypeScript.
 
-## Overview
+## Features
 
-The Analytics Service provides:
-- **Ingestion API** (`POST /api/v1/events`) - Accept batches of analytics events
-- **Query API** (`GET /api/v1/events`) - Query stored events with filtering and pagination
-- **Multi-cloud support** - Deploy to AWS (DynamoDB + S3) or Azure (Cosmos DB + Blob Storage)
-- **Asynchronous processing** - Queue-based event processing with dead-letter handling
-- **Raw event storage** - Immutable audit trail for replay and compliance
-
-## Architecture
-
-This service follows the Analytics Microservice Contract & Storage Specification v1.0.0 (see `docs/analytics-service-spec-v1.0.0.md`).
+- **Event Ingestion**: REST API for batch event ingestion with validation
+- **Event Querying**: Flexible query API with cursor-based pagination
+- **Multi-Cloud**: Supports AWS (DynamoDB, S3, SQS) and Azure (Cosmos DB, Blob Storage, Queue)
+- **Dual Storage**: Operational store for queries + immutable raw storage for audit
+- **Type-Safe**: Full TypeScript with strict type checking
+- **Tested**: Comprehensive unit and integration test coverage
+- **Local Development**: Run and test without any cloud dependencies
 
 **Event types supported:**
 - `track` - Custom events (e.g., button clicks, purchases)
