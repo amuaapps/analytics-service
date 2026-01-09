@@ -10,8 +10,8 @@ param throughput int = 400
 @description('Enable autoscale')
 param enableAutoscale bool = true
 
-@description('Default TTL in seconds')
-param defaultTtl int = 7776000 // 90 days
+@description('Default TTL in seconds (12 months = 365 days)')
+param defaultTtl int = 31536000 // 365 days = 12 months
 
 @description('Tags for resources')
 param tags object

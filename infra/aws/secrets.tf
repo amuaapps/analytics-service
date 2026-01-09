@@ -48,9 +48,9 @@ resource "aws_iam_policy" "lambda_secrets_access" {
   )
 }
 
-# Attach policy to Lambda execution role
-resource "aws_iam_role_policy_attachment" "lambda_secrets_access" {
-  role       = aws_iam_role.lambda_execution.name
+# Attach policy to Ingest Lambda role (only Lambda that validates write key)
+resource "aws_iam_role_policy_attachment" "ingest_lambda_secrets_access" {
+  role       = aws_iam_role.ingest_lambda.name
   policy_arn = aws_iam_policy.lambda_secrets_access.arn
 }
 

@@ -2,6 +2,7 @@ import type { EventRepository, QueryEventsResult } from '../interfaces.js';
 import type { StoredEvent } from '../../domain/stored-event-types.js';
 import type { QueryEventsInput } from '../../domain/query-types.js';
 import type { Logger } from '../../utils/logger.js';
+import { decodeCursor, encodeCursor } from '../../utils/cursor.js';
 
 export class InMemoryOperationalStorage implements EventRepository {
   private events: Map<string, StoredEvent> = new Map();
@@ -41,9 +42,10 @@ export class InMemoryOperationalStorage implements EventRepository {
     let cursorData: { pk: string; sk: string } | undefined;
     if (input.cursor) {
       try {
-        cursorData = JSON.parse(input.cursor);
+        cursorData = decodeCursor(input.cursor);
       } catch (error) {
-        this.logger.warn({ error }, 'Failed to parse cursor');
+        this.logger.warn({ error: error instanceof Error ? error.message : 'Unknown' }, 'Invalid cursor provided');
+        throw new Error('Invalid pagination cursor');
       }
     }
 
@@ -118,14 +120,13 @@ export class InMemoryOperationalStorage implements EventRepository {
     const hasMore = paginatedResults.length > (input.limit || 50);
     const finalResults = hasMore ? paginatedResults.slice(0, -1) : paginatedResults;
 
-    // Generate cursor for next page if hasMore
+    // Generate canonical cursor for next page if hasMore
     let cursor: string | undefined;
     if (hasMore && finalResults.length > 0) {
       const lastEvent = finalResults[finalResults.length - 1];
-      cursor = JSON.stringify({
-        pk: lastEvent.source.appId,
-        sk: `${lastEvent.occurredAt}#${lastEvent.eventId}`,
-      });
+      const pk = lastEvent.source.appId;
+      const sk = `${lastEvent.occurredAt}#${lastEvent.eventId}`;
+      cursor = encodeCursor(pk, sk);
     }
 
     this.logger.debug(

@@ -101,12 +101,11 @@ export async function handleProcessor(
 
   // Write to raw storage (immutable, always succeeds or throws)
   try {
+    // RawBatch type only includes: batchId, requestId, receivedAt, events
     const rawBatch = {
       batchId,
       requestId,
       receivedAt,
-      processedAt,
-      eventCount: newEvents.length,
       events: newEvents,
     };
 

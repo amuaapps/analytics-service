@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll } from '@jest/globals';
-import type { IngestRequestEnvelope } from '../../../src/domain/types.js';
+import type { IngestRequestEnvelope } from '../../../src/domain/ingest-types.js';
 
 /**
  * Post-deployment integration test harness
@@ -27,13 +27,14 @@ const TEST_SESSION_ID = `session-${Date.now()}`;
 const TEST_EVENT_ID = `event-${Date.now()}-${Math.random().toString(36).substring(7)}`;
 
 interface IngestResponse {
-  accepted: number;
+  accepted: boolean;
   eventCount: number;
-  requestId?: string;
+  batchId: string;
 }
 
 interface QueryResponse {
-  events: Array<{
+  items: Array<{
+    schemaVersion: string;
     eventId: string;
     type: string;
     name?: string;
@@ -54,11 +55,7 @@ interface QueryResponse {
     };
     properties?: Record<string, unknown>;
   }>;
-  pagination: {
-    limit: number;
-    hasMore: boolean;
-    nextCursor?: string;
-  };
+  nextCursor?: string;
 }
 
 /**
@@ -191,14 +188,14 @@ async function queryEventWithRetry(
       const data = (await response.json()) as QueryResponse;
 
       // Check if our event is in the results
-      const foundEvent = data.events.find((e) => e.eventId === eventId);
+      const foundEvent = data.items.find((e) => e.eventId === eventId);
       
       if (foundEvent) {
         return data;
       }
 
       console.log(
-        `Attempt ${attempt}/${maxRetries}: Event not yet queryable (found ${data.events.length} events)`
+        `Attempt ${attempt}/${maxRetries}: Event not yet queryable (found ${data.items.length} events)`
       );
 
       if (attempt < maxRetries) {
@@ -220,7 +217,7 @@ async function queryEventWithRetry(
  * Validate event matches contract
  */
 function validateEvent(
-  event: QueryResponse['events'][0],
+  event: QueryResponse['items'][0],
   expectedEventId: string
 ): void {
   // Required fields
@@ -242,8 +239,10 @@ function validateEvent(
 
   // Context validation (sessionId is stored in context)
   expect(event.context).toBeDefined();
-  expect((event.context as any)?.sessionId).toBe(TEST_SESSION_ID);
-  expect((event.context as any)?.testRun).toBe(true);
+  if (event.context) {
+    expect(event.context.sessionId).toBe(TEST_SESSION_ID);
+    expect(event.context.testRun).toBe(true);
+  }
 
   // Properties validation
   expect(event.properties).toBeDefined();
@@ -279,10 +278,11 @@ describe('Post-Deploy Integration Test Harness', () => {
     const ingestResponse = await ingestEvent(TEST_EVENT_ID);
     
     expect(ingestResponse).toBeDefined();
-    expect(ingestResponse.accepted).toBe(1);
+    expect(ingestResponse.accepted).toBe(true);
     expect(ingestResponse.eventCount).toBe(1);
+    expect(ingestResponse.batchId).toBeDefined();
     
-    console.log(`✓ Event ingested successfully (requestId: ${ingestResponse.requestId || 'N/A'})`);
+    console.log(`✓ Event ingested successfully (batchId: ${ingestResponse.batchId})`);
 
     console.log('\n[2/3] Waiting for event to be processed and queryable...');
     
@@ -294,15 +294,15 @@ describe('Post-Deploy Integration Test Harness', () => {
     );
 
     expect(queryResponse).not.toBeNull();
-    expect(queryResponse!.events).toBeDefined();
-    expect(queryResponse!.events.length).toBeGreaterThan(0);
+    expect(queryResponse!.items).toBeDefined();
+    expect(queryResponse!.items.length).toBeGreaterThan(0);
     
-    console.log(`✓ Event is queryable (found ${queryResponse!.events.length} events)`);
+    console.log(`✓ Event is queryable (found ${queryResponse!.items.length} events)`);
 
     console.log('\n[3/3] Validating event data matches contract...');
     
     // Step 3: Validate event
-    const foundEvent = queryResponse!.events.find(
+    const foundEvent = queryResponse!.items.find(
       (e) => e.eventId === TEST_EVENT_ID
     );
     
@@ -340,16 +340,15 @@ describe('Post-Deploy Integration Test Harness', () => {
     
     const data = (await response.json()) as QueryResponse;
     
-    expect(data.pagination).toBeDefined();
-    expect(data.pagination.limit).toBe(5);
-    expect(typeof data.pagination.hasMore).toBe('boolean');
+    expect(data.items).toBeDefined();
+    expect(Array.isArray(data.items)).toBe(true);
     
-    if (data.pagination.hasMore) {
-      expect(data.pagination.nextCursor).toBeDefined();
-      expect(typeof data.pagination.nextCursor).toBe('string');
+    if (data.nextCursor) {
+      expect(typeof data.nextCursor).toBe('string');
+      expect(data.nextCursor.length).toBeGreaterThan(0);
     }
     
-    console.log(`✓ Pagination validated (hasMore: ${data.pagination.hasMore})`);
+    console.log(`✓ Pagination validated (nextCursor: ${data.nextCursor ? 'present' : 'none'})`);
   }, 30000);
 
   it('should reject requests without authentication', async () => {

@@ -8,6 +8,8 @@ import type { EventRepository, QueryEventsResult } from '../interfaces.js';
 import type { StoredEvent } from '../../domain/stored-event-types.js';
 import type { QueryEventsInput } from '../../domain/query-types.js';
 import type { Logger } from '../../utils/logger.js';
+import { decodeCursor, encodeCursor } from '../../utils/cursor.js';
+import { calculateExpiresAt } from '../../config/retention.js';
 
 export interface DynamoDBEventRepositoryConfig {
   tableName: string;
@@ -18,13 +20,15 @@ export interface DynamoDBEventRepositoryConfig {
 /**
  * DynamoDB implementation of EventRepository
  * 
- * Table schema:
+ * Table schema (multi-tenant safe):
  * - PK: appId (partition key)
  * - SK: occurredAt#eventId (sort key for time-based queries)
- * - GSI1PK: userId (for user-based queries)
+ * - GSI1PK: appId#userId (composite key for user-based queries, scoped to app)
  * - GSI1SK: occurredAt#eventId
- * - GSI2PK: sessionId (for session-based queries)
+ * - GSI2PK: appId#sessionId (composite key for session-based queries, scoped to app)
  * - GSI2SK: occurredAt#eventId
+ * 
+ * Security: All GSI partition keys include appId to prevent cross-app data leakage
  */
 export class DynamoDBEventRepository implements EventRepository {
   private client: DynamoDBClient;
@@ -71,15 +75,17 @@ export class DynamoDBEventRepository implements EventRepository {
       let expressionAttributeValues: Record<string, unknown>;
 
       if (userId) {
-        // Query by user
+        // Query by user (scoped to appId for multi-tenant safety)
         indexName = 'GSI1';
-        keyConditionExpression = 'GSI1PK = :userId';
-        expressionAttributeValues = { ':userId': userId };
+        const compositeKey = `${appId}#${userId}`;
+        keyConditionExpression = 'GSI1PK = :compositeKey';
+        expressionAttributeValues = { ':compositeKey': compositeKey };
       } else if (sessionId) {
-        // Query by session
+        // Query by session (scoped to appId for multi-tenant safety)
         indexName = 'GSI2';
-        keyConditionExpression = 'GSI2PK = :sessionId';
-        expressionAttributeValues = { ':sessionId': sessionId };
+        const compositeKey = `${appId}#${sessionId}`;
+        keyConditionExpression = 'GSI2PK = :compositeKey';
+        expressionAttributeValues = { ':compositeKey': compositeKey };
       } else {
         // Query by appId (primary index)
         keyConditionExpression = 'PK = :appId';
@@ -99,13 +105,37 @@ export class DynamoDBEventRepository implements EventRepository {
         expressionAttributeValues[':to'] = to;
       }
 
+      // Parse cursor if provided
+      let exclusiveStartKey: Record<string, unknown> | undefined;
+      if (cursor) {
+        try {
+          const cursorData = decodeCursor(cursor);
+          // Reconstruct DynamoDB key structure from cursor data
+          exclusiveStartKey = {
+            PK: cursorData.pk,
+            SK: cursorData.sk,
+          };
+          // Add GSI keys if querying by index
+          if (indexName === 'GSI1') {
+            exclusiveStartKey.GSI1PK = cursorData.pk;
+            exclusiveStartKey.GSI1SK = cursorData.sk;
+          } else if (indexName === 'GSI2') {
+            exclusiveStartKey.GSI2PK = cursorData.pk;
+            exclusiveStartKey.GSI2SK = cursorData.sk;
+          }
+        } catch (error) {
+          this.logger.warn({ error: error instanceof Error ? error.message : 'Unknown' }, 'Invalid cursor provided');
+          throw new Error('Invalid pagination cursor');
+        }
+      }
+
       const command = new QueryCommand({
         TableName: this.tableName,
         IndexName: indexName,
         KeyConditionExpression: keyConditionExpression,
         ExpressionAttributeValues: marshall(expressionAttributeValues),
         Limit: limit + 1, // Fetch one extra to determine hasMore
-        ExclusiveStartKey: cursor ? JSON.parse(Buffer.from(cursor, 'base64').toString()) : undefined,
+        ExclusiveStartKey: exclusiveStartKey ? marshall(exclusiveStartKey) : undefined,
         ScanIndexForward: input.sort === 'asc',
       });
 
@@ -114,9 +144,23 @@ export class DynamoDBEventRepository implements EventRepository {
 
       const hasMore = items.length > limit;
       const events = hasMore ? items.slice(0, limit) : items;
-      const nextCursor = hasMore && response.LastEvaluatedKey
-        ? Buffer.from(JSON.stringify(response.LastEvaluatedKey)).toString('base64')
-        : undefined;
+      
+      // Generate canonical cursor from last item if hasMore
+      let nextCursor: string | undefined;
+      if (hasMore && events.length > 0) {
+        const lastEvent = events[events.length - 1];
+        // Cursor pk uses composite key for GSI queries to maintain multi-tenant safety
+        let pk: string;
+        if (userId) {
+          pk = `${appId}#${userId}`;
+        } else if (sessionId) {
+          pk = `${appId}#${sessionId}`;
+        } else {
+          pk = appId;
+        }
+        const sk = `${lastEvent.occurredAt}#${lastEvent.eventId}`;
+        nextCursor = encodeCursor(pk, sk);
+      }
 
       this.logger.info(
         { appId, userId, sessionId, eventCount: events.length, hasMore },
@@ -152,8 +196,9 @@ export class DynamoDBEventRepository implements EventRepository {
   }
 
   private async putEvent(event: StoredEvent): Promise<void> {
+    const appId = event.source.appId;
     const item = {
-      PK: event.source.appId,
+      PK: appId,
       SK: `${event.occurredAt}#${event.eventId}`,
       eventId: event.eventId,
       type: event.type,
@@ -165,10 +210,14 @@ export class DynamoDBEventRepository implements EventRepository {
       actor: event.actor,
       context: event.context,
       schemaVersion: event.schemaVersion,
-      // Add GSI keys
-      GSI1PK: event.actor.userId || 'anonymous',
+      // TTL: Calculate expiration timestamp (12 months from occurredAt)
+      expiresAt: calculateExpiresAt(event.occurredAt),
+      // Add GSI keys with appId prefix for multi-tenant safety
+      GSI1PK: event.actor.userId ? `${appId}#${event.actor.userId}` : `${appId}#anonymous`,
       GSI1SK: `${event.occurredAt}#${event.eventId}`,
-      GSI2PK: (event.context as { sessionId?: string })?.sessionId || 'no-session',
+      GSI2PK: (event.context as { sessionId?: string })?.sessionId 
+        ? `${appId}#${(event.context as { sessionId?: string }).sessionId}` 
+        : `${appId}#no-session`,
       GSI2SK: `${event.occurredAt}#${event.eventId}`,
       // Type-specific fields
       ...(event.type === 'track' && { properties: event.properties }),

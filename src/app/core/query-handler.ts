@@ -2,7 +2,7 @@ import type { Logger } from '../../utils/logger.js';
 import { createChildLogger } from '../../utils/index.js';
 import type { CoreQueryRequest, CoreQueryResponse } from './types.js';
 import type { EventRepository } from '../../infra/interfaces.js';
-import { parseCursor, encodeCursor } from '../../domain/query-validation.js';
+import { isValidCursor } from '../../utils/cursor.js';
 
 export interface QueryHandlerDependencies {
   logger: Logger;
@@ -34,36 +34,20 @@ export async function handleQuery(
   );
 
   try {
-    // Parse cursor if provided
-    let parsedCursor: { pk: string; sk: string } | undefined;
+    // Validate cursor if provided (but treat as opaque - don't parse)
     if (input.cursor) {
-      try {
-        parsedCursor = parseCursor(input.cursor);
-        requestLogger.debug({ cursor: parsedCursor }, 'Parsed pagination cursor');
-      } catch (error) {
-        requestLogger.warn({ error: error instanceof Error ? error.message : 'Unknown' }, 'Invalid cursor provided');
+      if (!isValidCursor(input.cursor)) {
+        requestLogger.warn({ cursor: input.cursor }, 'Invalid cursor format');
         throw new Error('Invalid pagination cursor');
       }
+      requestLogger.debug('Valid pagination cursor provided');
     }
 
-    // Query storage with parsed cursor
-    const queryInput = {
-      ...input,
-      cursor: parsedCursor ? JSON.stringify(parsedCursor) : undefined,
-    };
+    // Query storage with opaque cursor (adapters handle decoding internally)
+    const result = await storageAdapter.queryEvents(input);
 
-    const result = await storageAdapter.queryEvents(queryInput);
-
-    // Encode cursor for response if hasMore
-    let nextCursor: string | undefined;
-    if (result.hasMore && result.cursor) {
-      try {
-        const cursorData = JSON.parse(result.cursor);
-        nextCursor = encodeCursor(cursorData.pk, cursorData.sk);
-      } catch (error) {
-        requestLogger.warn({ error: error instanceof Error ? error.message : 'Unknown' }, 'Failed to encode cursor');
-      }
-    }
+    // Cursor from storage adapter is already in canonical format
+    const nextCursor = result.cursor;
 
     requestLogger.info(
       {

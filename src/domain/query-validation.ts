@@ -73,22 +73,8 @@ export function validateQueryEventsInput(input: unknown): QueryEventsInput {
   };
 }
 
-export function parseCursor(cursor: string): { pk: string; sk: string } {
-  try {
-    const decoded = Buffer.from(cursor, 'base64url').toString('utf-8');
-    const parsed = JSON.parse(decoded);
-    
-    if (!parsed.pk || !parsed.sk || typeof parsed.pk !== 'string' || typeof parsed.sk !== 'string') {
-      throw new Error('Invalid cursor format');
-    }
-    
-    return { pk: parsed.pk, sk: parsed.sk };
-  } catch (error) {
-    throw new Error('Invalid cursor: ' + (error instanceof Error ? error.message : 'Unknown error'));
-  }
-}
-
-export function encodeCursor(pk: string, sk: string): string {
-  const cursorData = JSON.stringify({ pk, sk });
-  return Buffer.from(cursorData, 'utf-8').toString('base64url');
-}
+/**
+ * @deprecated Use cursor utilities from src/utils/cursor.ts instead
+ * These functions are kept for backward compatibility but will be removed in a future version
+ */
+export { decodeCursor as parseCursor, encodeCursor } from '../utils/cursor.js';

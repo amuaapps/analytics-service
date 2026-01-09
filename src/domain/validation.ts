@@ -224,7 +224,7 @@ export const VALIDATION_PATTERNS = {
 
 export function createValidateIngestRequestEnvelope(limits: LimitsConfig) {
   const schema = createIngestRequestEnvelopeSchema(limits);
-  return (data: unknown): void => {
-    schema.parse(data);
+  return (data: unknown) => {
+    return schema.safeParse(data);
   };
 }

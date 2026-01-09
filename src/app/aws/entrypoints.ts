@@ -14,50 +14,89 @@ import { createLogger } from '../../utils/logger.js';
 import { SQSQueuePublisher } from '../../infra/aws/sqs-queue-publisher.js';
 import { DynamoDBEventRepository } from '../../infra/aws/dynamodb-event-repository.js';
 import { S3RawEventStore } from '../../infra/aws/s3-raw-event-store.js';
+import { loadAnalyticsWriteKey } from '../../config/secrets.js';
+
+// Cache for write key (loaded once per Lambda instance)
+let cachedWriteKey: string | null = null;
 
 // Load configuration from environment variables
 function loadConfig() {
-  const requiredEnvVars = {
+  return {
     NODE_ENV: process.env.NODE_ENV || 'development',
     LOG_LEVEL: process.env.LOG_LEVEL || 'info',
-    ANALYTICS_WRITE_KEY: process.env.ANALYTICS_WRITE_KEY,
   };
-
-  // Validate required environment variables
-  if (!requiredEnvVars.ANALYTICS_WRITE_KEY) {
-    throw new Error('ANALYTICS_WRITE_KEY environment variable is required');
-  }
-
-  return requiredEnvVars;
 }
 
-// Validate authentication
-function validateAuth(event: APIGatewayProxyEvent): void {
-  const config = loadConfig();
+// Load and cache write key from Secrets Manager
+async function getWriteKey(): Promise<string> {
+  if (cachedWriteKey) {
+    return cachedWriteKey;
+  }
+
+  // Fetch from Secrets Manager (with internal caching)
+  cachedWriteKey = await loadAnalyticsWriteKey('aws');
+  return cachedWriteKey;
+}
+
+// Validate authentication with constant-time comparison
+async function validateAuth(event: APIGatewayProxyEvent): Promise<void> {
   const authHeader = event.headers['x-analytics-write-key'] || event.headers['X-Analytics-Write-Key'];
 
-  if (!authHeader) {
-    throw new Error('Missing X-Analytics-Write-Key header');
+  if (!authHeader || typeof authHeader !== 'string') {
+    throw new Error('AUTHENTICATION_ERROR: Missing or invalid write key');
   }
 
-  if (authHeader !== config.ANALYTICS_WRITE_KEY) {
-    throw new Error('Invalid write key');
+  const validKey = await getWriteKey();
+  
+  // Constant-time comparison to prevent timing attacks
+  if (validKey.length !== authHeader.length) {
+    throw new Error('AUTHENTICATION_ERROR: Invalid write key');
+  }
+  
+  let matches = true;
+  for (let i = 0; i < validKey.length; i++) {
+    if (validKey.charCodeAt(i) !== authHeader.charCodeAt(i)) {
+      matches = false;
+    }
+  }
+  
+  if (!matches) {
+    throw new Error('AUTHENTICATION_ERROR: Invalid write key');
   }
 }
 
-// Create error response for auth failures
-function createAuthErrorResponse(error: Error): APIGatewayProxyResult {
-  const isAuthError = error.message.includes('write key') || error.message.includes('Missing X-Analytics-Write-Key');
-  
+// Create canonical error response
+function createErrorResponse(
+  error: unknown,
+  statusCode: number = 500,
+  requestId?: string
+): APIGatewayProxyResult {
+  const message = error instanceof Error ? error.message.replace(/^[A-Z_]+:\s*/, '') : 'Internal server error';
+  const errorCode = error instanceof Error && error.message.startsWith('AUTHENTICATION_ERROR')
+    ? 'AUTHENTICATION_ERROR'
+    : statusCode === 400
+    ? 'VALIDATION_ERROR'
+    : statusCode === 413
+    ? 'PAYLOAD_TOO_LARGE'
+    : 'INTERNAL_SERVER_ERROR';
+
+  const body: { error: { code: string; message: string }; requestId?: string } = {
+    error: {
+      code: errorCode,
+      message,
+    },
+  };
+
+  if (requestId) {
+    body.requestId = requestId;
+  }
+
   return {
-    statusCode: isAuthError ? 401 : 500,
+    statusCode,
     headers: {
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({
-      error: isAuthError ? 'Unauthorized' : 'Internal Server Error',
-      message: error.message,
-    }),
+    body: JSON.stringify(body),
   };
 }
 
@@ -74,9 +113,11 @@ export async function ingestHandler(
   event: APIGatewayProxyEvent,
   context: Context
 ): Promise<APIGatewayProxyResult> {
+  const requestId = context.awsRequestId;
+
   try {
-    // Validate authentication
-    validateAuth(event);
+    // Validate authentication (async - fetches from Secrets Manager)
+    await validateAuth(event);
 
     // Lazy initialize handler
     if (!ingestHandlerInstance) {
@@ -99,9 +140,11 @@ export async function ingestHandler(
 
     return await ingestHandlerInstance(event, context);
   } catch (error) {
-    if (error instanceof Error && (error.message.includes('write key') || error.message.includes('Missing X-Analytics-Write-Key'))) {
-      return createAuthErrorResponse(error);
+    // Handle authentication errors with canonical 401 response
+    if (error instanceof Error && error.message.startsWith('AUTHENTICATION_ERROR')) {
+      return createErrorResponse(error, 401, requestId);
     }
+    // Re-throw other errors to be handled by Lambda error handling
     throw error;
   }
 }

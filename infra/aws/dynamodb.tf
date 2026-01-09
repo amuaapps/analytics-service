@@ -46,7 +46,9 @@ resource "aws_dynamodb_table" "events" {
     enabled        = true
   }
 
-  # GSI1: Query by userId
+  # GSI1: Query by userId (multi-tenant safe)
+  # GSI1PK format: appId#userId (composite key prevents cross-app queries)
+  # GSI1SK format: occurredAt#eventId (time-based sorting)
   global_secondary_index {
     name            = "GSI1"
     hash_key        = "GSI1PK"
@@ -56,7 +58,9 @@ resource "aws_dynamodb_table" "events" {
     write_capacity  = var.dynamodb_billing_mode == "PROVISIONED" ? var.dynamodb_write_capacity : null
   }
 
-  # GSI2: Query by sessionId
+  # GSI2: Query by sessionId (multi-tenant safe)
+  # GSI2PK format: appId#sessionId (composite key prevents cross-app queries)
+  # GSI2SK format: occurredAt#eventId (time-based sorting)
   global_secondary_index {
     name            = "GSI2"
     hash_key        = "GSI2PK"

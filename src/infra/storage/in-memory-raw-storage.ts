@@ -1,14 +1,7 @@
-import type { RawStorageAdapter } from '../../app/core/types.js';
+import type { RawEventStore, RawBatch } from '../interfaces.js';
 import type { Logger } from '../../utils/logger.js';
 
-interface RawBatch {
-  batchId: string;
-  requestId: string;
-  receivedAt: string;
-  events: unknown[];
-}
-
-export class InMemoryRawStorage implements RawStorageAdapter {
+export class InMemoryRawStorage implements RawEventStore {
   private batches: Map<string, RawBatch> = new Map();
   private logger: Logger;
 
@@ -16,7 +9,7 @@ export class InMemoryRawStorage implements RawStorageAdapter {
     this.logger = logger;
   }
 
-  async storeRawBatch(batch: { batchId: string; requestId: string; receivedAt: string; events: unknown[] }): Promise<void> {
+  async storeRawBatch(batch: RawBatch): Promise<void> {
     // Generate unique filename using batchId and timestamp
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
     const filename = `${batch.batchId}_${timestamp}.json`;

@@ -3,6 +3,8 @@ import type { EventRepository, QueryEventsResult } from '../interfaces.js';
 import type { StoredEvent } from '../../domain/stored-event-types.js';
 import type { QueryEventsInput } from '../../domain/query-types.js';
 import type { Logger } from '../../utils/logger.js';
+import { decodeCursor, encodeCursor } from '../../utils/cursor.js';
+import { calculateCosmosDbTtl } from '../../config/retention.js';
 
 export interface CosmosEventRepositoryConfig {
   connectionString: string;
@@ -37,6 +39,7 @@ export class CosmosEventRepository implements EventRepository {
         resourceBody: {
           id: event.eventId,
           pk: event.source.appId, // Partition key field
+          ttl: calculateCosmosDbTtl(event.occurredAt), // TTL in seconds (12 months from occurredAt)
           ...event,
         },
       }));
@@ -119,17 +122,39 @@ export class CosmosEventRepository implements EventRepository {
         parameters,
       };
 
+      // Parse cursor if provided (Cosmos uses native continuation tokens, but we wrap them)
+      let continuationToken: string | undefined;
+      if (cursor) {
+        try {
+          const cursorData = decodeCursor(cursor);
+          // For Cosmos, we store the continuation token in the sk field
+          // pk is used for validation/consistency
+          continuationToken = cursorData.sk;
+        } catch (error) {
+          this.logger.warn({ error: error instanceof Error ? error.message : 'Unknown' }, 'Invalid cursor provided');
+          throw new Error('Invalid pagination cursor');
+        }
+      }
+
       const iterator = await this.container.items
         .query<StoredEvent>(querySpec, {
           maxItemCount: limit + 1, // Fetch one extra to determine hasMore
-          continuationToken: cursor,
+          continuationToken,
           partitionKey: appId, // Partition key value (matches pk field)
         });
 
-      const { resources: items, continuationToken } = await iterator.fetchNext();
+      const { resources: items, continuationToken: nextContinuationToken } = await iterator.fetchNext();
 
       const hasMore = items.length > limit;
       const events = hasMore ? items.slice(0, limit) : items;
+      
+      // Generate canonical cursor wrapping Cosmos continuation token
+      let nextCursor: string | undefined;
+      if (hasMore && nextContinuationToken) {
+        // Wrap Cosmos continuation token in canonical cursor format
+        // pk = appId for consistency, sk = continuation token
+        nextCursor = encodeCursor(appId, nextContinuationToken);
+      }
 
       this.logger.info(
         { appId, userId, sessionId, eventCount: events.length, hasMore },
@@ -139,7 +164,7 @@ export class CosmosEventRepository implements EventRepository {
       return {
         events,
         hasMore,
-        cursor: continuationToken,
+        cursor: nextCursor,
       };
     } catch (error) {
       this.logger.error({ err: error, input }, 'Failed to query events from Cosmos DB');

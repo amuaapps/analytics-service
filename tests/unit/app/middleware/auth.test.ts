@@ -192,8 +192,11 @@ describe('Authentication Middleware', () => {
 
       expect(statusMock).toHaveBeenCalledWith(401);
       expect(jsonMock).toHaveBeenCalledWith({
-        error: 'Unauthorized',
-        message: 'Invalid X-Analytics-Write-Key',
+        error: {
+          code: 'AUTHENTICATION_ERROR',
+          message: 'Invalid write key',
+        },
+        requestId: 'req-123',
       });
       expect(mockNext).not.toHaveBeenCalled();
     });
@@ -212,8 +215,11 @@ describe('Authentication Middleware', () => {
 
       expect(statusMock).toHaveBeenCalledWith(401);
       expect(jsonMock).toHaveBeenCalledWith({
-        error: 'Unauthorized',
-        message: 'Invalid X-Analytics-Write-Key header format',
+        error: {
+          code: 'AUTHENTICATION_ERROR',
+          message: 'Missing or invalid write key',
+        },
+        requestId: 'req-123',
       });
       expect(mockNext).not.toHaveBeenCalled();
     });

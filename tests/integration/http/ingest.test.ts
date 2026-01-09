@@ -10,15 +10,15 @@ import { SCHEMA_VERSION } from '../../../src/domain/base-types.js';
 describe('POST /api/v1/events - Integration', () => {
   let app: Express;
   let queueAdapter: InMemoryQueueAdapter;
-  let config: ReturnType<typeof loadConfig>;
+  let config: Awaited<ReturnType<typeof loadConfig>>;
 
-  beforeAll(() => {
+  beforeAll(async () => {
     process.env.NODE_ENV = 'test';
     process.env.SERVICE_NAME = 'analytics-service-test';
     process.env.ANALYTICS_WRITE_KEY = 'test-key-123';
     process.env.CORS_ALLOWED_ORIGINS = '*';
 
-    config = loadConfig();
+    config = await loadConfig();
 
     const logger = createLogger({
       serviceName: config.service.serviceName,
@@ -28,10 +28,17 @@ describe('POST /api/v1/events - Integration', () => {
 
     queueAdapter = new InMemoryQueueAdapter(logger);
 
+    // Create minimal storage adapter mock for ingest tests
+    const mockStorageAdapter = {
+      storeEvents: async () => Promise.resolve(),
+      queryEvents: async () => Promise.resolve({ events: [], hasMore: false }),
+      checkEventExists: async () => Promise.resolve(false),
+    };
+
     app = createServer({
       logger,
       queueAdapter,
-      storageAdapter: {} as any, // Not used in ingest tests
+      storageAdapter: mockStorageAdapter,
       config,
     });
   });
