@@ -11,10 +11,11 @@
  *   node --loader ts-node/esm src/local-server.ts
  */
 
-import { createServer } from './app/http/server.js';
 import { createLogger } from './utils/logger.js';
+import { createServer } from './app/http/server.js';
 import { InMemoryQueueAdapter } from './infra/queue/in-memory-queue-adapter.js';
 import { InMemoryOperationalStorage } from './infra/storage/in-memory-operational-storage.js';
+import { InMemoryRawStorage } from './infra/storage/in-memory-raw-storage.js';
 import type { Config } from './config/types.js';
 // In-memory adapters now implement canonical infra interfaces (QueuePublisher, EventRepository)
 
@@ -30,6 +31,7 @@ const logger = createLogger({
 // Create in-memory implementations (no cloud dependencies)
 const queueAdapter = new InMemoryQueueAdapter(logger);
 const storageAdapter = new InMemoryOperationalStorage(logger);
+const rawStorage = new InMemoryRawStorage(logger);
 
 // Local development configuration
 const config: Config = {
@@ -61,6 +63,7 @@ const app = createServer({
   logger,
   queueAdapter,
   storageAdapter,
+  rawStorage,
   config,
 });
 

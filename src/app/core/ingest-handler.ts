@@ -1,11 +1,12 @@
 import type { Logger } from '../../utils/logger.js';
 import { generateBatchId, createChildLogger } from '../../utils/index.js';
 import type { CoreIngestRequest, CoreIngestResponse } from './types.js';
-import type { QueuePublisher } from '../../infra/interfaces.js';
+import type { QueuePublisher, RawEventStore } from '../../infra/interfaces.js';
 
 export interface IngestHandlerDependencies {
   logger: Logger;
   queueAdapter: QueuePublisher;
+  rawStorage: RawEventStore;
 }
 
 export async function handleIngest(
@@ -13,7 +14,7 @@ export async function handleIngest(
   deps: IngestHandlerDependencies
 ): Promise<CoreIngestResponse> {
   const { requestId, payload } = request;
-  const { logger, queueAdapter } = deps;
+  const { logger, queueAdapter, rawStorage } = deps;
 
   const requestLogger = createChildLogger(logger, {
     requestId,
@@ -25,6 +26,7 @@ export async function handleIngest(
 
   const batchId = generateBatchId();
   const eventIds = payload.events.map((event) => event.eventId);
+  const receivedAt = new Date().toISOString();
 
   const batchLogger = createChildLogger(requestLogger, {
     batchId,
@@ -32,15 +34,32 @@ export async function handleIngest(
   });
 
   try {
-    batchLogger.info('Enqueuing events for processing');
+    // Step 1: Store raw batch in immutable storage (S3/Blob)
+    batchLogger.info('Storing raw batch in immutable storage');
+    
+    const pointer = await rawStorage.storeRawBatch({
+      batchId,
+      requestId,
+      receivedAt,
+      events: payload.events,
+    });
+
+    batchLogger.info(
+      { storageLocation: pointer.storageLocation },
+      'Raw batch stored successfully'
+    );
+
+    // Step 2: Enqueue lightweight pointer message
+    batchLogger.info('Enqueuing pointer message for processing');
 
     await queueAdapter.enqueue({
       requestId,
       batchId,
-      events: payload.events,
+      receivedAt,
+      storageLocation: pointer.storageLocation,
     });
 
-    batchLogger.info('Events enqueued successfully');
+    batchLogger.info('Pointer message enqueued successfully');
 
     return {
       accepted: true,
@@ -48,7 +67,7 @@ export async function handleIngest(
       batchId,
     };
   } catch (error) {
-    batchLogger.error({ err: error }, 'Failed to enqueue events');
+    batchLogger.error({ err: error }, 'Failed to process ingest request');
     throw error;
   }
 }

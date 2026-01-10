@@ -42,12 +42,12 @@ export class AzureQueuePublisher implements QueuePublisher {
         // visibilityTimeout: 0,
       });
 
-      this.logger.info(
+      this.logger.debug(
         {
           queueName: this.queueClient.name,
           messageId: response.messageId,
           batchId: message.batchId,
-          eventCount: message.events.length,
+          storageLocation: message.storageLocation,
         },
         'Enqueued message to Azure Storage Queue'
       );

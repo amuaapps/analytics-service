@@ -41,9 +41,9 @@ export class SQSQueuePublisher implements QueuePublisher {
             DataType: 'String',
             StringValue: message.batchId,
           },
-          eventCount: {
-            DataType: 'Number',
-            StringValue: message.events.length.toString(),
+          storageLocation: {
+            DataType: 'String',
+            StringValue: message.storageLocation,
           },
         },
         // Use batchId as deduplication ID for FIFO queues
@@ -53,12 +53,12 @@ export class SQSQueuePublisher implements QueuePublisher {
 
       const response = await this.client.send(command);
 
-      this.logger.info(
+      this.logger.debug(
         {
           queueUrl: this.queueUrl,
           messageId: response.MessageId,
           batchId: message.batchId,
-          eventCount: message.events.length,
+          storageLocation: message.storageLocation,
         },
         'Enqueued message to SQS'
       );

@@ -67,7 +67,7 @@ describe('Lambda HTTP Query Handler', () => {
         multiValueQueryStringParameters: null,
       };
 
-      (mockStorageAdapter.queryEvents as jest.Mock).mockResolvedValue({
+      (mockStorageAdapter.queryEvents as any).mockResolvedValue({
         events: [],
         cursor: undefined,
         hasMore: false,
@@ -179,7 +179,7 @@ describe('Lambda HTTP Query Handler', () => {
         multiValueQueryStringParameters: null,
       };
 
-      (mockStorageAdapter.queryEvents as jest.Mock).mockResolvedValue({
+      (mockStorageAdapter.queryEvents as any).mockResolvedValue({
         events: [],
         cursor: undefined,
         hasMore: false,
@@ -218,7 +218,7 @@ describe('Lambda HTTP Query Handler', () => {
         multiValueQueryStringParameters: null,
       };
 
-      (mockStorageAdapter.queryEvents as jest.Mock).mockResolvedValue({
+      (mockStorageAdapter.queryEvents as any).mockResolvedValue({
         events: [],
         cursor: undefined,
         hasMore: false,
@@ -332,7 +332,7 @@ describe('Lambda HTTP Query Handler', () => {
 
       const expectedCursor = Buffer.from(JSON.stringify({ pk: 'test-app', sk: '2024-01-02T00:00:00Z#event-456' }), 'utf-8').toString('base64url');
 
-      (mockStorageAdapter.queryEvents as jest.Mock).mockResolvedValue({
+      (mockStorageAdapter.queryEvents as any).mockResolvedValue({
         events: mockEvents,
         cursor: expectedCursor,
         hasMore: true,
@@ -376,7 +376,7 @@ describe('Lambda HTTP Query Handler', () => {
         multiValueQueryStringParameters: null,
       };
 
-      (mockStorageAdapter.queryEvents as jest.Mock).mockResolvedValue({
+      (mockStorageAdapter.queryEvents as any).mockResolvedValue({
         events: [{ eventId: 'event-1', type: 'track' }],
         cursor: undefined,
         hasMore: false,
@@ -449,7 +449,7 @@ describe('Lambda HTTP Query Handler', () => {
         multiValueQueryStringParameters: null,
       };
 
-      (mockStorageAdapter.queryEvents as jest.Mock).mockRejectedValue(
+      (mockStorageAdapter.queryEvents as any).mockRejectedValue(
         new Error('Invalid pagination cursor')
       );
 
@@ -484,7 +484,7 @@ describe('Lambda HTTP Query Handler', () => {
         multiValueQueryStringParameters: null,
       };
 
-      (mockStorageAdapter.queryEvents as jest.Mock).mockRejectedValue(
+      (mockStorageAdapter.queryEvents as any).mockRejectedValue(
         new Error('Database connection failed')
       );
 

@@ -5,6 +5,7 @@ import { createServer } from '../../../src/app/http/server.js';
 import { createLogger } from '../../../src/utils/logger.js';
 import { InMemoryQueueAdapter } from '../../../src/infra/queue/in-memory-queue-adapter.js';
 import { InMemoryOperationalStorage } from '../../../src/infra/storage/in-memory-operational-storage.js';
+import { InMemoryRawStorage } from '../../../src/infra/storage/in-memory-raw-storage.js';
 import type { Config } from '../../../src/config/types.js';
 
 describe('Error Handling Integration Tests', () => {
@@ -12,6 +13,7 @@ describe('Error Handling Integration Tests', () => {
   let logger: ReturnType<typeof createLogger>;
   let queueAdapter: InMemoryQueueAdapter;
   let storageAdapter: InMemoryOperationalStorage;
+  let rawStorage: InMemoryRawStorage;
   let config: Config;
 
   beforeEach(() => {
@@ -23,6 +25,7 @@ describe('Error Handling Integration Tests', () => {
 
     queueAdapter = new InMemoryQueueAdapter(logger);
     storageAdapter = new InMemoryOperationalStorage(logger);
+    rawStorage = new InMemoryRawStorage(logger);
 
     config = {
       service: {
@@ -52,6 +55,7 @@ describe('Error Handling Integration Tests', () => {
       logger,
       queueAdapter,
       storageAdapter,
+      rawStorage,
       config,
     });
   });

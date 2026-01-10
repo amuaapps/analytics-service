@@ -133,9 +133,15 @@ export async function ingestHandler(
         throw new Error('SQS_QUEUE_URL environment variable is required');
       }
 
+      const bucketName = process.env.S3_RAW_EVENTS_BUCKET;
+      if (!bucketName) {
+        throw new Error('S3_RAW_EVENTS_BUCKET environment variable is required');
+      }
+
       const region = process.env.AWS_REGION || 'us-east-1';
       const queueAdapter = new SQSQueuePublisher({ queueUrl, region, logger });
-      ingestHandlerInstance = createLambdaIngestHandler({ logger, queueAdapter });
+      const rawStorage = new S3RawEventStore({ bucketName, region, logger });
+      ingestHandlerInstance = createLambdaIngestHandler({ logger, queueAdapter, rawStorage });
     }
 
     return await ingestHandlerInstance(event, context);

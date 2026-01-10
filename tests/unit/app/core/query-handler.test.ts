@@ -1,13 +1,13 @@
 import { describe, it, expect, jest, beforeEach } from '@jest/globals';
 import { handleQuery } from '../../../../src/app/core/query-handler.js';
-import type { CoreQueryRequest, CoreQueryResponse, OperationalStorageAdapter } from '../../../../src/app/core/types.js';
+import type { CoreQueryRequest, CoreQueryResponse, EventRepository } from '../../../../src/app/core/types.js';
 import type { QueryEventsInput } from '../../../../src/domain/query-types.js';
 import type { StoredEvent } from '../../../../src/domain/stored-event-types.js';
 import { createLogger } from '../../../../src/utils/logger.js';
 import { SCHEMA_VERSION } from '../../../../src/domain/base-types.js';
 
 describe('Core Query Handler', () => {
-  let mockStorageAdapter: jest.Mocked<OperationalStorageAdapter>;
+  let mockStorageAdapter: jest.Mocked<EventRepository>;
   let logger: ReturnType<typeof createLogger>;
 
   beforeEach(() => {
@@ -18,7 +18,7 @@ describe('Core Query Handler', () => {
         hasMore: false,
       }),
       checkEventExists: jest.fn<(eventId: string) => Promise<boolean>>().mockResolvedValue(false),
-    } as jest.Mocked<OperationalStorageAdapter>;
+    } as jest.Mocked<EventRepository>;
 
     logger = createLogger({
       serviceName: 'test-service',

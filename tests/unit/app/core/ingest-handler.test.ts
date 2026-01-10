@@ -1,17 +1,17 @@
 import { describe, it, expect, jest, beforeEach } from '@jest/globals';
 import { handleIngest } from '../../../../src/app/core/ingest-handler.js';
-import type { CoreIngestRequest, CoreProcessorRequest, QueueAdapter } from '../../../../src/app/core/types.js';
+import type { CoreIngestRequest, CoreProcessorRequest } from '../../../../src/app/core/types.js';
 import { createLogger } from '../../../../src/utils/logger.js';
 import { SCHEMA_VERSION } from '../../../../src/domain/base-types.js';
 
 describe('Core Ingest Handler', () => {
-  let mockQueueAdapter: jest.Mocked<QueueAdapter>;
+  let mockQueueAdapter: any;
   let logger: ReturnType<typeof createLogger>;
 
   beforeEach(() => {
     mockQueueAdapter = {
       enqueue: jest.fn<(message: CoreProcessorRequest) => Promise<void>>().mockResolvedValue(undefined),
-    } as jest.Mocked<QueueAdapter>;
+    } as any;
 
     logger = createLogger({
       serviceName: 'test-service',
@@ -48,7 +48,7 @@ describe('Core Ingest Handler', () => {
 
       const result = await handleIngest(request, {
         logger,
-        queueAdapter: mockQueueAdapter,
+        queueAdapter: mockQueueAdapter, rawStorage: {} as any,
       });
 
       expect(result.accepted).toBe(true);
@@ -103,7 +103,7 @@ describe('Core Ingest Handler', () => {
 
       const result = await handleIngest(request, {
         logger,
-        queueAdapter: mockQueueAdapter,
+        queueAdapter: mockQueueAdapter, rawStorage: {} as any,
       });
 
       expect(result.accepted).toBe(true);
@@ -132,12 +132,12 @@ describe('Core Ingest Handler', () => {
 
       const result1 = await handleIngest(request, {
         logger,
-        queueAdapter: mockQueueAdapter,
+        queueAdapter: mockQueueAdapter, rawStorage: {} as any,
       });
 
       const result2 = await handleIngest(request, {
         logger,
-        queueAdapter: mockQueueAdapter,
+        queueAdapter: mockQueueAdapter, rawStorage: {} as any,
       });
 
       expect(result1.batchId).not.toBe(result2.batchId);
@@ -167,7 +167,7 @@ describe('Core Ingest Handler', () => {
       await expect(
         handleIngest(request, {
           logger,
-          queueAdapter: mockQueueAdapter,
+          queueAdapter: mockQueueAdapter, rawStorage: {} as any,
         })
       ).rejects.toThrow('Queue error');
     });
@@ -202,11 +202,11 @@ describe('Core Ingest Handler', () => {
 
       await handleIngest(request, {
         logger,
-        queueAdapter: mockQueueAdapter,
+        queueAdapter: mockQueueAdapter, rawStorage: {} as any,
       });
 
       const enqueuedMessage = mockQueueAdapter.enqueue.mock.calls[0][0];
-      expect(enqueuedMessage.events.map((e) => e.eventId)).toEqual(['evt-001', 'evt-002']);
+      expect(enqueuedMessage.events.map((e: any) => e.eventId)).toEqual(['evt-001', 'evt-002']);
     });
   });
 });

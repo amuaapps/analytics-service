@@ -30,11 +30,7 @@ export function createLambdaSQSProcessorHandler(deps: LambdaProcessorDependencie
         const coreRequest = parseSQSMessage(record);
 
         const result = await handleProcessor(
-          {
-            requestId: coreRequest.requestId,
-            batchId: coreRequest.batchId,
-            events: coreRequest.events,
-          },
+          coreRequest,
           {
             logger,
             operationalStorage,

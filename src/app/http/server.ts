@@ -4,7 +4,7 @@ import { getOrGenerateRequestId } from '../../utils/correlation.js';
 import { createAuthMiddleware, parseWriteKeys } from '../middleware/auth.js';
 import { createValidationMiddleware } from '../middleware/validation.js';
 import { handleIngest } from '../core/ingest-handler.js';
-import type { QueuePublisher, EventRepository } from '../../infra/interfaces.js';
+import type { QueuePublisher, EventRepository, RawEventStore } from '../../infra/interfaces.js';
 import type { Config } from '../../config/types.js';
 import { createQueryHttpHandler } from './query-handler.js';
 import { sendErrorResponse as sendError, PayloadTooLargeError } from './errors.js';
@@ -13,6 +13,7 @@ export interface ServerDependencies {
   logger: Logger;
   queueAdapter: QueuePublisher;
   storageAdapter: EventRepository;
+  rawStorage: RawEventStore;
   config: Config;
 }
 
@@ -55,7 +56,7 @@ function errorHandler(logger: Logger) {
 
 
 export function createServer(deps: ServerDependencies): Express {
-  const { logger, queueAdapter, storageAdapter, config } = deps;
+  const { logger, queueAdapter, storageAdapter, rawStorage, config } = deps;
   const app = express();
 
   // JSON body parser with payload size limit
@@ -91,6 +92,7 @@ export function createServer(deps: ServerDependencies): Express {
         {
           logger,
           queueAdapter,
+          rawStorage,
         }
       )
         .then((result) => {

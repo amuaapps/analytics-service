@@ -26,9 +26,31 @@ describe('Processor Integration Tests', () => {
 
   describe('dual storage persistence', () => {
     it('should store events in both operational and raw storage', async () => {
+      // Store raw batch first
+      const testEvents = [
+        {
+          schemaVersion: SCHEMA_VERSION,
+          eventId: '550e8400-e29b-41d4-a716-446655440000',
+          type: 'track',
+          name: 'button.clicked',
+          occurredAt: '2026-01-08T06:00:00Z',
+          source: { appId: 'web-storefront', platform: 'web', env: 'prod' },
+          actor: { userId: 'user-123' },
+        },
+      ];
+      
+      const pointer = await rawStorage.storeRawBatch({
+        batchId: 'batch-456',
+        requestId: 'req-123',
+        receivedAt: '2026-01-08T06:00:00Z',
+        events: testEvents,
+      });
+
       const request: CoreProcessorRequest = {
         requestId: 'req-123',
-        batchId: 'batch-456',
+        batchId: pointer.batchId,
+        receivedAt: '2026-01-08T06:00:00Z',
+        storageLocation: pointer.storageLocation,
         events: [
           {
             schemaVersion: SCHEMA_VERSION,

@@ -1,5 +1,5 @@
 import { BlobServiceClient } from '@azure/storage-blob';
-import type { RawEventStore, RawBatch } from '../interfaces.js';
+import type { RawEventStore, RawBatch, RawBatchPointer } from '../interfaces.js';
 import type { Logger } from '../../utils/logger.js';
 
 export interface BlobRawEventStoreConfig {
@@ -28,7 +28,7 @@ export class BlobRawEventStore implements RawEventStore {
     this.blobServiceClient = BlobServiceClient.fromConnectionString(config.connectionString);
   }
 
-  async storeRawBatch(batch: RawBatch): Promise<void> {
+  async storeRawBatch(batch: RawBatch): Promise<RawBatchPointer> {
     try {
       const blobName = this.generateBlobName(batch);
       const containerClient = this.blobServiceClient.getContainerClient(this.containerName);
@@ -63,6 +63,11 @@ export class BlobRawEventStore implements RawEventStore {
         },
         'Stored raw batch in Azure Blob Storage'
       );
+
+      return {
+        batchId: batch.batchId,
+        storageLocation: blobName,
+      };
     } catch (error) {
       this.logger.error(
         { err: error, batchId: batch.batchId },
@@ -70,6 +75,58 @@ export class BlobRawEventStore implements RawEventStore {
       );
       throw error;
     }
+  }
+
+  async getRawBatch(pointer: RawBatchPointer): Promise<RawBatch> {
+    try {
+      const containerClient = this.blobServiceClient.getContainerClient(this.containerName);
+      const blockBlobClient = containerClient.getBlockBlobClient(pointer.storageLocation);
+
+      const downloadResponse = await blockBlobClient.download();
+
+      if (!downloadResponse.readableStreamBody) {
+        throw new Error('Empty response body from Azure Blob Storage');
+      }
+
+      const bodyString = await this.streamToString(downloadResponse.readableStreamBody);
+      const data = JSON.parse(bodyString);
+
+      this.logger.debug(
+        {
+          container: this.containerName,
+          blobName: pointer.storageLocation,
+          batchId: pointer.batchId,
+          eventCount: data.eventCount,
+        },
+        'Retrieved raw batch from Azure Blob Storage'
+      );
+
+      return {
+        batchId: data.batchId,
+        requestId: data.requestId,
+        receivedAt: data.receivedAt,
+        events: data.events,
+      };
+    } catch (error) {
+      this.logger.error(
+        { err: error, batchId: pointer.batchId, storageLocation: pointer.storageLocation },
+        'Failed to retrieve raw batch from Azure Blob Storage'
+      );
+      throw error;
+    }
+  }
+
+  private async streamToString(readableStream: NodeJS.ReadableStream): Promise<string> {
+    return new Promise((resolve, reject) => {
+      const chunks: Buffer[] = [];
+      readableStream.on('data', (data) => {
+        chunks.push(Buffer.isBuffer(data) ? data : Buffer.from(data));
+      });
+      readableStream.on('end', () => {
+        resolve(Buffer.concat(chunks).toString('utf8'));
+      });
+      readableStream.on('error', reject);
+    });
   }
 
   private generateBlobName(batch: RawBatch): string {

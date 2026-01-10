@@ -3,6 +3,7 @@ import request from 'supertest';
 import type { Express } from 'express';
 import { createServer } from '../../../src/app/http/server.js';
 import { InMemoryQueueAdapter } from '../../../src/infra/queue/in-memory-queue-adapter.js';
+import { InMemoryRawStorage } from '../../../src/infra/storage/in-memory-raw-storage.js';
 import { createLogger } from '../../../src/utils/logger.js';
 import { loadConfig } from '../../../src/config/config.js';
 import { SCHEMA_VERSION } from '../../../src/domain/base-types.js';
@@ -19,7 +20,6 @@ describe('POST /api/v1/events - Integration', () => {
     process.env.CORS_ALLOWED_ORIGINS = '*';
 
     config = await loadConfig();
-
     const logger = createLogger({
       serviceName: config.service.serviceName,
       level: 'error',
@@ -27,6 +27,7 @@ describe('POST /api/v1/events - Integration', () => {
     });
 
     queueAdapter = new InMemoryQueueAdapter(logger);
+    const rawStorage = new InMemoryRawStorage(logger);
 
     // Create minimal storage adapter mock for ingest tests
     const mockStorageAdapter = {
@@ -39,6 +40,7 @@ describe('POST /api/v1/events - Integration', () => {
       logger,
       queueAdapter,
       storageAdapter: mockStorageAdapter,
+      rawStorage,
       config,
     });
   });
@@ -96,11 +98,18 @@ describe('POST /api/v1/events - Integration', () => {
       expect(response.headers['x-request-id']).toBeDefined();
       expect(queueAdapter.size()).toBe(1);
 
+      const queuedMessages = queueAdapter.getQueue();
+      expect(queuedMessages).toHaveLength(1);
+      expect(queuedMessages[0].batchId).toBe(response.body.batchId);
+      expect(queuedMessages[0].storageLocation).toBeDefined();
+      expect(queuedMessages[0].receivedAt).toBeDefined();
+
+      // Verify pointer message structure
       const queuedMessage = queueAdapter.getQueue()[0];
       expect(queuedMessage.requestId).toBeDefined();
       expect(queuedMessage.batchId).toBeDefined();
-      expect(queuedMessage.events).toHaveLength(1);
-      expect(queuedMessage.events[0].eventId).toBe('550e8400-e29b-41d4-a716-446655440000');
+      expect(queuedMessage.storageLocation).toBeDefined();
+      expect(queuedMessage.receivedAt).toBeDefined();
     });
 
     it('should accept multiple events in batch', async () => {
@@ -150,7 +159,7 @@ describe('POST /api/v1/events - Integration', () => {
 
       expect(queueAdapter.size()).toBe(1);
       const queuedMessage = queueAdapter.getQueue()[0];
-      expect(queuedMessage.events).toHaveLength(3);
+      expect(queuedMessage.storageLocation).toBeDefined();
     });
 
     it('should propagate X-Request-ID header', async () => {

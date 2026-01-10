@@ -26,8 +26,14 @@ describe('Core Processor Handler', () => {
     };
 
     mockRawStorage = {
-      storeRawBatch: jest.fn<() => Promise<void>>().mockResolvedValue(undefined),
-    };
+      storeRawBatch: jest.fn().mockResolvedValue({ batchId: 'test-batch', storageLocation: 'test-location' }),
+      getRawBatch: jest.fn().mockResolvedValue({
+        batchId: 'test-batch',
+        requestId: 'test-request',
+        receivedAt: '2026-01-08T06:00:00Z',
+        events: [],
+      }),
+    } as any;
 
     logger = createLogger({
       serviceName: 'test-service',
@@ -40,20 +46,30 @@ describe('Core Processor Handler', () => {
 
   describe('handleProcessor', () => {
     it('should process events and store them', async () => {
+      const testEvents = [
+        {
+          schemaVersion: SCHEMA_VERSION,
+          eventId: '550e8400-e29b-41d4-a716-446655440000',
+          type: 'track',
+          name: 'button.clicked',
+          occurredAt: '2026-01-08T06:00:00Z',
+          source: { appId: 'web-storefront', platform: 'web', env: 'prod' },
+          actor: { userId: 'user-123' },
+        },
+      ];
+
+      (mockRawStorage.getRawBatch as jest.Mock).mockResolvedValueOnce({
+        batchId: 'batch-456',
+        requestId: 'req-123',
+        receivedAt: '2026-01-08T06:00:00Z',
+        events: testEvents,
+      });
+
       const request: CoreProcessorRequest = {
         requestId: 'req-123',
         batchId: 'batch-456',
-        events: [
-          {
-            schemaVersion: SCHEMA_VERSION,
-            eventId: '550e8400-e29b-41d4-a716-446655440000',
-            type: 'track',
-            name: 'button.clicked',
-            occurredAt: '2026-01-08T06:00:00Z',
-            source: { appId: 'web-storefront', platform: 'web', env: 'prod' },
-            actor: { userId: 'user-123' },
-          },
-        ],
+        receivedAt: '2026-01-08T06:00:00Z',
+        storageLocation: 's3://bucket/key',
       };
 
       const deps = {

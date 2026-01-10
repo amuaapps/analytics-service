@@ -1,40 +1,34 @@
 import { describe, it, expect } from '@jest/globals';
 import {
-  ingestEventSchema,
-  ingestRequestEnvelopeSchema,
-  queryEventsInputSchema,
-  VALIDATION_CONSTANTS,
   type IngestEvent,
   type IngestRequestEnvelope,
   SCHEMA_VERSION,
 } from '../../../src/domain/index.js';
+import { createValidateIngestRequestEnvelope } from '../../../src/domain/validation.js';
+import { loadLimitsConfig } from '../../../src/config/limits.js';
+import { validateQueryEventsInput } from '../../../src/domain/query-validation.js';
 
 describe('Domain Validation', () => {
   describe('ingestEventSchema', () => {
     describe('track event', () => {
       it('should validate a valid track event', () => {
-        const validTrackEvent: IngestEvent = {
+        const validEvent: IngestEvent = {
           schemaVersion: SCHEMA_VERSION,
           eventId: '550e8400-e29b-41d4-a716-446655440000',
           type: 'track',
           name: 'button.clicked',
-          occurredAt: '2026-01-07T20:00:00Z',
-          source: {
-            appId: 'web-storefront',
-            platform: 'web',
-            env: 'prod',
-          },
-          actor: {
-            userId: 'user_123',
-            sessionId: 'session_456',
-          },
+          occurredAt: '2026-01-08T06:00:00Z',
+          source: { appId: 'web-storefront', platform: 'web', env: 'prod' },
+          actor: { userId: 'user-123' },
           properties: {
             button_id: 'checkout_btn',
             page_name: 'cart',
           },
         };
 
-        const result = ingestEventSchema.safeParse(validTrackEvent);
+        const limits = loadLimitsConfig();
+        const validate = createValidateIngestRequestEnvelope(limits);
+        const result = validate({ schemaVersion: SCHEMA_VERSION, events: [validEvent] });
         expect(result.success).toBe(true);
       });
 

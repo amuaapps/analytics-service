@@ -8,10 +8,14 @@ import { getOrGenerateRequestId } from '../../utils/correlation.js';
 import { createValidateIngestRequestEnvelope } from '../../domain/validation.js';
 import { loadLimitsConfig } from '../../config/limits.js';
 import type { ZodError } from 'zod';
+import type { RawEventStore } from '../../infra/interfaces.js';
+import type { LimitsConfig } from '../../config/types.js';
 
 export interface LambdaIngestDependencies {
   logger: Logger;
   queueAdapter: QueuePublisher;
+  rawStorage: RawEventStore;
+  limits?: LimitsConfig;
 }
 
 // Load limits config once at module level

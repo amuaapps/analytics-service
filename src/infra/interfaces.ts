@@ -42,8 +42,16 @@ export interface RawEventStore {
   /**
    * Store raw batch in immutable storage
    * @param batch - Raw batch metadata and events
+   * @returns Storage location reference (key/blob name)
    */
-  storeRawBatch(batch: RawBatch): Promise<void>;
+  storeRawBatch(batch: RawBatch): Promise<RawBatchPointer>;
+
+  /**
+   * Retrieve raw batch from immutable storage
+   * @param pointer - Storage location reference
+   * @returns Raw batch data
+   */
+  getRawBatch(pointer: RawBatchPointer): Promise<RawBatch>;
 }
 
 export interface RawBatch {
@@ -53,6 +61,11 @@ export interface RawBatch {
   events: IngestRequestEnvelope['events'];
 }
 
+export interface RawBatchPointer {
+  batchId: string;
+  storageLocation: string; // S3 key or Azure blob name
+}
+
 /**
  * QueuePublisher: Message queue for async processing
  * Implementations: SQS (AWS), Storage Queue (Azure)
@@ -60,13 +73,19 @@ export interface RawBatch {
 export interface QueuePublisher {
   /**
    * Enqueue a batch for processing
-   * @param batch - Batch to enqueue
+   * @param message - Pointer message to enqueue
    */
-  enqueue(batch: QueueMessage): Promise<void>;
+  enqueue(message: QueueMessage): Promise<void>;
 }
 
+/**
+ * QueueMessage: Lightweight pointer to raw batch in storage
+ * This design keeps queue messages small (<256KB) to work within
+ * SQS (256KB) and Azure Queue (64KB) limits
+ */
 export interface QueueMessage {
   requestId: string;
   batchId: string;
-  events: IngestRequestEnvelope['events'];
+  receivedAt: string;
+  storageLocation: string; // S3 key or Azure blob name
 }

@@ -19,12 +19,12 @@ export class InMemoryQueueAdapter implements QueuePublisher {
 
     this.logger.debug(
       {
-        requestId: message.requestId,
-        batchId: message.batchId,
-        eventCount: message.events.length,
+        batchId: enrichedMessage.batchId,
+        requestId: enrichedMessage.requestId,
+        storageLocation: enrichedMessage.storageLocation,
         queueSize: this.queue.length,
       },
-      'Message enqueued'
+      'Message enqueued to in-memory queue'
     );
 
     return Promise.resolve();

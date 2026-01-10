@@ -5,6 +5,7 @@ import { createServer } from '../../../src/app/http/server.js';
 import { createLogger } from '../../../src/utils/logger.js';
 import { InMemoryQueueAdapter } from '../../../src/infra/queue/in-memory-queue-adapter.js';
 import { InMemoryOperationalStorage } from '../../../src/infra/storage/in-memory-operational-storage.js';
+import { InMemoryRawStorage } from '../../../src/infra/storage/in-memory-raw-storage.js';
 import { SCHEMA_VERSION } from '../../../src/domain/base-types.js';
 import type { StoredEvent } from '../../../src/domain/stored-event-types.js';
 import type { Config } from '../../../src/config/types.js';
@@ -14,18 +15,19 @@ describe('Query API Integration Tests', () => {
   let logger: ReturnType<typeof createLogger>;
   let queueAdapter: InMemoryQueueAdapter;
   let storageAdapter: InMemoryOperationalStorage;
+  let rawStorage: InMemoryRawStorage;
   let config: Config;
 
   beforeEach(() => {
     logger = createLogger({
-      serviceName: 'test-analytics-service',
+      serviceName: 'analytics-service-test',
       level: 'error',
       env: 'test',
     });
-
     queueAdapter = new InMemoryQueueAdapter(logger);
     storageAdapter = new InMemoryOperationalStorage(logger);
-    
+    rawStorage = new InMemoryRawStorage(logger);
+
     config = {
       service: {
         serviceName: 'test-analytics-service',
@@ -54,6 +56,7 @@ describe('Query API Integration Tests', () => {
       logger,
       queueAdapter,
       storageAdapter,
+      rawStorage,
       config,
     });
   });

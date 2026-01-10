@@ -24,10 +24,16 @@ export interface CoreQueryResponse {
   hasMore: boolean;
 }
 
+/**
+ * CoreProcessorRequest: Pointer-based message for async processing
+ * Contains reference to raw batch in storage, not the full events array
+ * This keeps queue messages small (<256KB for SQS, <64KB for Azure Queue)
+ */
 export interface CoreProcessorRequest {
   requestId: string;
   batchId: string;
-  events: IngestRequestEnvelope['events'];
+  receivedAt: string;
+  storageLocation: string; // S3 key or Azure blob name
 }
 
 export interface CoreProcessorResponse {
