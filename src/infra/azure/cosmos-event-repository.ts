@@ -1,4 +1,4 @@
-import { CosmosClient, Container } from '@azure/cosmos';
+import { CosmosClient, Container, type OperationInput, type SqlQuerySpec } from '@azure/cosmos';
 import type { EventRepository, QueryEventsResult } from '../interfaces.js';
 import type { StoredEvent } from '../../domain/stored-event-types.js';
 import type { QueryEventsInput } from '../../domain/query-types.js';
@@ -34,14 +34,14 @@ export class CosmosEventRepository implements EventRepository {
   async storeEvents(events: StoredEvent[]): Promise<void> {
     try {
       // Use bulk operations for efficiency
-      const operations = events.map((event) => ({
+      const operations: OperationInput[] = events.map((event) => ({
         operationType: 'Create' as const,
         resourceBody: {
           id: event.eventId,
           pk: event.source.appId, // Partition key field
           ttl: calculateCosmosDbTtl(event.occurredAt), // TTL in seconds (12 months from occurredAt)
           ...event,
-        },
+        } as any, // Azure Cosmos SDK has overly strict JSONValue types
       }));
 
       const response = await this.container.items.bulk(operations);
@@ -117,9 +117,9 @@ export class CosmosEventRepository implements EventRepository {
       query += ` ORDER BY c.occurredAt ${input.sort === 'asc' ? 'ASC' : 'DESC'}`;
 
       // Execute query with pagination
-      const querySpec = {
+      const querySpec: SqlQuerySpec = {
         query,
-        parameters,
+        parameters: parameters as any, // Azure Cosmos SDK has overly strict JSONValue types
       };
 
       // Parse cursor if provided (Cosmos uses native continuation tokens, but we wrap them)

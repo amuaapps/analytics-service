@@ -1,6 +1,7 @@
 import { describe, it, expect, jest, beforeEach } from '@jest/globals';
 import { handleQuery } from '../../../../src/app/core/query-handler.js';
-import type { CoreQueryRequest, CoreQueryResponse, EventRepository } from '../../../../src/app/core/types.js';
+import type { CoreQueryRequest, CoreQueryResponse } from '../../../../src/app/core/types.js';
+import type { EventRepository } from '../../../../src/infra/interfaces.js';
 import type { QueryEventsInput } from '../../../../src/domain/query-types.js';
 import type { StoredEvent } from '../../../../src/domain/stored-event-types.js';
 import { createLogger } from '../../../../src/utils/logger.js';

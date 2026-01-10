@@ -140,7 +140,7 @@ export class DynamoDBEventRepository implements EventRepository {
       });
 
       const response = await this.client.send(command);
-      const items = (response.Items || []).map((item: Record<string, unknown>) => unmarshall(item) as StoredEvent);
+      const items = (response.Items || []).map((item) => unmarshall(item) as StoredEvent);
 
       const hasMore = items.length > limit;
       const events = hasMore ? items.slice(0, limit) : items;
