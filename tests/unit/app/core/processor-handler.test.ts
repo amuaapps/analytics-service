@@ -180,7 +180,7 @@ describe('Core Processor Handler', () => {
         events: [
           {
             schemaVersion: SCHEMA_VERSION,
-            eventId: 'evt-001',
+            eventId: '550e8400-e29b-41d4-a716-446655440010',
             type: 'track',
             name: 'test.event',
             occurredAt: '2026-01-08T06:00:00Z',
@@ -189,7 +189,7 @@ describe('Core Processor Handler', () => {
           },
           {
             schemaVersion: SCHEMA_VERSION,
-            eventId: 'evt-002',
+            eventId: '550e8400-e29b-41d4-a716-446655440011',
             type: 'track',
             name: 'test.event',
             occurredAt: '2026-01-08T06:00:01Z',
@@ -212,9 +212,9 @@ describe('Core Processor Handler', () => {
       expect(result.failed).toBe(2);
       expect(result.errors).toBeDefined();
       expect(result.errors).toHaveLength(2);
-      expect(result.errors?.[0].eventId).toBe('evt-001');
+      expect(result.errors?.[0].eventId).toBe('550e8400-e29b-41d4-a716-446655440010');
       expect(result.errors?.[0].error).toBeDefined();
-      expect(result.errors?.[1].eventId).toBe('evt-002');
+      expect(result.errors?.[1].eventId).toBe('550e8400-e29b-41d4-a716-446655440011');
       expect(result.errors?.[1].error).toBeDefined();
     });
 
@@ -249,6 +249,120 @@ describe('Core Processor Handler', () => {
 
       expect(result.processed).toBe(1);
       expect(result.failed).toBe(0);
+    });
+
+    it('should reject malformed messages without storing events', async () => {
+      const malformedRequest: CoreProcessorRequest = {
+        requestId: 'req-malformed',
+        batchId: 'batch-malformed',
+        events: [
+          {
+            // Missing required fields - invalid event
+            schemaVersion: SCHEMA_VERSION,
+            eventId: '550e8400-e29b-41d4-a716-446655440099',
+            type: 'track' as any,
+            // Missing: name, occurredAt, source, actor
+          } as any,
+        ],
+      };
+
+      const deps = {
+        logger: mockLogger,
+        operationalStorage: mockOperationalStorage,
+        rawStorage: mockRawStorage,
+        limits,
+      };
+
+      const result = await handleProcessor(malformedRequest, deps);
+
+      // Should not crash
+      expect(result).toBeDefined();
+      
+      // Should not process any events
+      expect(result.processed).toBe(0);
+      expect(result.failed).toBe(1);
+      
+      // Should not write to operational storage
+      expect(mockOperationalStorage.storeEvents).not.toHaveBeenCalled();
+      
+      // Should not write to raw storage
+      expect(mockRawStorage.storeRawBatch).not.toHaveBeenCalled();
+      
+      // Should return validation error
+      expect(result.errors).toBeDefined();
+      expect(result.errors).toHaveLength(1);
+      expect(result.errors![0].eventId).toBe('batch');
+      expect(result.errors![0].error).toContain('Validation failed');
+    });
+
+    it('should reject batch with invalid event type', async () => {
+      const invalidTypeRequest: CoreProcessorRequest = {
+        requestId: 'req-invalid-type',
+        batchId: 'batch-invalid-type',
+        events: [
+          {
+            schemaVersion: SCHEMA_VERSION,
+            eventId: '550e8400-e29b-41d4-a716-446655440098',
+            type: 'invalid_type' as any, // Invalid event type
+            name: 'test.event',
+            occurredAt: '2026-01-08T06:00:00Z',
+            source: { appId: 'app', platform: 'web', env: 'test' },
+            actor: { userId: 'user-1' },
+          } as any,
+        ],
+      };
+
+      const deps = {
+        logger: mockLogger,
+        operationalStorage: mockOperationalStorage,
+        rawStorage: mockRawStorage,
+        limits,
+      };
+
+      const result = await handleProcessor(invalidTypeRequest, deps);
+
+      expect(result.processed).toBe(0);
+      expect(result.failed).toBe(1);
+      expect(mockOperationalStorage.storeEvents).not.toHaveBeenCalled();
+      expect(mockRawStorage.storeRawBatch).not.toHaveBeenCalled();
+    });
+
+    it('should reject batch exceeding size limits', async () => {
+      const largePropertiesRequest: CoreProcessorRequest = {
+        requestId: 'req-large',
+        batchId: 'batch-large',
+        events: [
+          {
+            schemaVersion: SCHEMA_VERSION,
+            eventId: '550e8400-e29b-41d4-a716-446655440097',
+            type: 'track',
+            name: 'test.event',
+            occurredAt: '2026-01-08T06:00:00Z',
+            source: { appId: 'app', platform: 'web', env: 'test' },
+            actor: { userId: 'user-1' },
+            properties: {
+              // Create a very long string that exceeds maxStringLength
+              longString: 'x'.repeat(limits.maxStringLength + 1000),
+            },
+          },
+        ],
+      };
+
+      const deps = {
+        logger: mockLogger,
+        operationalStorage: mockOperationalStorage,
+        rawStorage: mockRawStorage,
+        limits,
+      };
+
+      const result = await handleProcessor(largePropertiesRequest, deps);
+
+      expect(result.processed).toBe(0);
+      expect(result.failed).toBe(1);
+      expect(mockOperationalStorage.storeEvents).not.toHaveBeenCalled();
+      expect(mockRawStorage.storeRawBatch).not.toHaveBeenCalled();
+      // Validation will fail on depth before checking string length
+      expect(result.errors![0].error).toContain('Validation failed');
     });
   });
 });

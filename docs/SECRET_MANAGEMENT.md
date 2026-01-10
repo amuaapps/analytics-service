@@ -7,14 +7,26 @@ Following `agents.md` best practice section 8.4, the analytics write key has bee
 - **AWS:** Secrets Manager
 - **Azure:** Key Vault with managed identity access
 
+**IMPORTANT:** As of 2026-01-09, AWS secret management has been refactored to follow best practices:
+- ✅ Terraform creates the secret resource structure
+- ✅ GitHub Actions workflow sets the secret value via AWS CLI
+- ✅ Secret value is **NOT** stored in Terraform state
+- ✅ Secret value is **NOT** passed through Terraform plan output
+
 ## Architecture
 
 ### AWS Lambda
 
 **Infrastructure (Terraform):**
-1. Creates Secrets Manager secret per environment
+1. Creates Secrets Manager secret resource per environment (structure only)
 2. Grants Lambda execution role `secretsmanager:GetSecretValue` permission (least privilege)
 3. Passes secret ARN (not value) as environment variable
+4. **Does NOT manage secret value** (handled by workflow)
+
+**Deployment (GitHub Actions):**
+1. Terraform creates/updates secret resource structure
+2. Workflow step "Update Analytics Write Key Secret" sets the actual value via AWS CLI
+3. Secret value comes from GitHub Secrets, never touches Terraform state
 
 **Runtime:**
 1. Lambda reads `ANALYTICS_WRITE_KEY_SECRET_ARN` from env
@@ -74,17 +86,32 @@ ANALYTICS_WRITE_KEY=@Microsoft.KeyVault(SecretUri=https://kv-name.vault.azure.ne
 
 ### ✅ Secrets Not in IaC State
 
-**Before:**
+**Before (Legacy):**
 ```terraform
-# terraform.tfstate contains plaintext secret
-"ANALYTICS_WRITE_KEY": "my-secret-key-123"
+# terraform.tfstate contained plaintext secret
+resource "aws_secretsmanager_secret_version" "analytics_write_key" {
+  secret_id     = aws_secretsmanager_secret.analytics_write_key.id
+  secret_string = var.analytics_write_key  # ❌ Secret in state!
+}
 ```
 
-**After:**
+**After (Current):**
 ```terraform
-# terraform.tfstate only contains ARN reference
-"ANALYTICS_WRITE_KEY_SECRET_ARN": "arn:aws:secretsmanager:..."
+# terraform.tfstate only contains resource metadata
+resource "aws_secretsmanager_secret" "analytics_write_key" {
+  name_prefix = "${var.environment}-analytics-write-key-"
+  description = "Analytics service write key"
+  # No secret_version resource - value managed by workflow
+}
+
+# Workflow sets value via AWS CLI (not in Terraform)
 ```
+
+**Result:**
+- ✅ Secret value never touches Terraform state
+- ✅ Secret value never appears in Terraform plan output
+- ✅ Secret value never logged in CI (AWS CLI auto-masks)
+- ✅ Terraform only manages resource structure, not sensitive data
 
 ### ✅ Least Privilege IAM
 
@@ -110,16 +137,48 @@ Secrets can be rotated without code changes:
 
 ### AWS
 
+**Method 1: Via GitHub Actions (Recommended)**
+
+The workflow automatically handles secret management:
+
+```yaml
+# .github/workflows/deploy.yml
+
+- name: Terraform Apply
+  run: terraform apply -auto-approve tfplan
+  env:
+    TF_VAR_environment: ${{ needs.setup.outputs.environment }}
+    TF_VAR_aws_region: ${{ vars.AWS_REGION }}
+    TF_VAR_project_name: analytics-service
+    # NOTE: TF_VAR_analytics_write_key is NOT passed here
+
+- name: Update Analytics Write Key Secret
+  env:
+    ANALYTICS_WRITE_KEY: ${{ secrets.ANALYTICS_WRITE_KEY }}
+  run: |
+    SECRET_NAME=$(terraform output -raw analytics_write_key_secret_name)
+    aws secretsmanager put-secret-value \
+      --secret-id "$SECRET_NAME" \
+      --secret-string "$ANALYTICS_WRITE_KEY"
+```
+
+**Method 2: Manual Deployment**
+
 ```bash
 cd infra/aws
 
-# Set secret as Terraform variable (not in state file)
-export TF_VAR_analytics_write_key="your-secret-key"
-
-# Deploy infrastructure
+# Deploy infrastructure (no secret value needed)
 terraform apply
 
-# Secret is now in Secrets Manager, not in Lambda env vars
+# Get the secret name from Terraform output
+SECRET_NAME=$(terraform output -raw analytics_write_key_secret_name)
+
+# Set the secret value via AWS CLI
+aws secretsmanager put-secret-value \
+  --secret-id "$SECRET_NAME" \
+  --secret-string "your-secret-key"
+
+# Secret is now in Secrets Manager, NOT in Terraform state
 ```
 
 ### Azure
@@ -138,14 +197,34 @@ az deployment group create \
 
 ### CI/CD Updates
 
-**GitHub Actions (AWS):**
+**GitHub Actions (AWS) - Current Implementation:**
 ```yaml
-- name: Deploy Infrastructure
+# Step 1: Terraform creates secret resource (no value)
+- name: Terraform Apply
+  working-directory: infra/aws
+  run: terraform apply -auto-approve tfplan
   env:
-    TF_VAR_analytics_write_key: ${{ secrets.ANALYTICS_WRITE_KEY }}
+    TF_VAR_environment: ${{ needs.setup.outputs.environment }}
+    TF_VAR_aws_region: ${{ vars.AWS_REGION }}
+    TF_VAR_project_name: analytics-service
+    # NOTE: No TF_VAR_analytics_write_key here!
+
+# Step 2: Workflow sets secret value via AWS CLI
+- name: Update Analytics Write Key Secret
+  env:
+    AWS_REGION: ${{ vars.AWS_REGION || 'us-east-1' }}
+    ANALYTICS_WRITE_KEY: ${{ secrets.ANALYTICS_WRITE_KEY }}
   run: |
     cd infra/aws
-    terraform apply -auto-approve
+    SECRET_NAME=$(terraform output -raw analytics_write_key_secret_name)
+    cd ../..
+    
+    aws secretsmanager put-secret-value \
+      --secret-id "$SECRET_NAME" \
+      --secret-string "$ANALYTICS_WRITE_KEY" \
+      --region "$AWS_REGION"
+    
+    echo "✅ Secret updated (NOT stored in Terraform state)"
 ```
 
 **GitHub Actions (Azure):**
@@ -176,9 +255,19 @@ Code automatically detects when cloud provider is not configured and uses direct
 **AWS:**
 ```bash
 cd infra/aws
-terraform show | grep -i "ANALYTICS_WRITE_KEY"
-# Should only show: ANALYTICS_WRITE_KEY_SECRET_ARN
-# Should NOT show plaintext key
+
+# Check Terraform state - should NOT contain secret value
+terraform show | grep -i "analytics_write_key"
+# Should show: secret resource metadata only
+# Should NOT show: plaintext secret value
+
+# Verify secret value is in Secrets Manager (not Terraform)
+SECRET_NAME=$(terraform output -raw analytics_write_key_secret_name)
+aws secretsmanager get-secret-value \
+  --secret-id "$SECRET_NAME" \
+  --query 'SecretString' \
+  --output text
+# Should return: the actual secret value (from workflow, not Terraform)
 ```
 
 **Azure:**

@@ -27,8 +27,10 @@ on:
           - prod
 
 # Prevent concurrent deployments to the same environment
+# Lock is per resolved environment (dev/staging/prod), not per branch or input
+# This ensures manual and automatic deployments to the same environment are serialized
 concurrency:
-  group: deploy-${{ github.ref_name }}-${{ github.event.inputs.environment || 'auto' }}
+  group: deploy-${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.environment != 'auto' && github.event.inputs.environment != '') && github.event.inputs.environment || (github.ref_name == 'develop' && 'dev') || (github.ref_name == 'release' && 'staging') || (github.ref_name == 'main' && 'prod') || github.ref_name }}
   cancel-in-progress: false
 
 # Minimal permissions (least privilege)
@@ -329,7 +331,6 @@ jobs:
           TF_VAR_environment: ${{ needs.setup.outputs.environment }}
           TF_VAR_aws_region: ${{ vars.AWS_REGION || 'us-east-1' }}
           TF_VAR_project_name: analytics-service
-          TF_VAR_analytics_write_key: ${{ secrets.ANALYTICS_WRITE_KEY }}
 
       - name: Terraform Apply
         working-directory: infra/aws
@@ -338,6 +339,28 @@ jobs:
           TF_VAR_environment: ${{ needs.setup.outputs.environment }}
           TF_VAR_aws_region: ${{ vars.AWS_REGION || 'us-east-1' }}
           TF_VAR_project_name: analytics-service
+
+      - name: Update Analytics Write Key Secret
+        env:
+          AWS_REGION: ${{ vars.AWS_REGION || 'us-east-1' }}
+          ENVIRONMENT: ${{ needs.setup.outputs.environment }}
+          ANALYTICS_WRITE_KEY: ${{ secrets.ANALYTICS_WRITE_KEY }}
+        run: |
+          # Get the secret name from Terraform output
+          cd infra/aws
+          SECRET_NAME=$(terraform output -raw analytics_write_key_secret_name)
+          cd ../..
+          
+          echo "Updating secret: $SECRET_NAME"
+          
+          # Update the secret value (AWS CLI automatically masks secret values in logs)
+          aws secretsmanager put-secret-value \
+            --secret-id "$SECRET_NAME" \
+            --secret-string "$ANALYTICS_WRITE_KEY" \
+            --region "$AWS_REGION"
+          
+          echo "✅ Analytics write key secret updated successfully"
+          echo "Note: Secret value is NOT stored in Terraform state"
 
       - name: Deploy Lambda functions
         id: deploy
@@ -484,15 +507,99 @@ jobs:
         id: get-url
         env:
           AWS_REGION: ${{ vars.AWS_REGION || 'us-east-1' }}
-          PROJECT_NAME: analytics-service
           ENVIRONMENT: ${{ needs.setup.outputs.environment }}
         run: |
-          API_URL=$(aws apigatewayv2 get-apis \
-            --region ${AWS_REGION} \
-            --query "Items[?Name=='${PROJECT_NAME}-api-${ENVIRONMENT}'].ApiEndpoint | [0]" \
-            --output text)
+          # Get the complete invoke URL from Terraform output (includes stage path)
+          cd infra/aws
+          API_URL=$(terraform output -raw api_gateway_url)
+          cd ../..
+          
           echo "api_url=$API_URL" >> $GITHUB_OUTPUT
-          echo "API Gateway URL: $API_URL (Region: ${AWS_REGION})"
+          echo "API Gateway URL: $API_URL"
+          echo "Note: URL includes stage path (/${ENVIRONMENT})"
+
+      - name: Save current BLUE alias versions
+        id: save-blue
+        env:
+          AWS_REGION: ${{ vars.AWS_REGION || 'us-east-1' }}
+          INGEST_FUNCTION: ${{ needs.deploy-aws-green.outputs.ingest_function }}
+          QUERY_FUNCTION: ${{ needs.deploy-aws-green.outputs.query_function }}
+          PROCESSOR_FUNCTION: ${{ needs.deploy-aws-green.outputs.processor_function }}
+        run: |
+          echo "Saving current BLUE alias versions for potential rollback..."
+          
+          # Get current versions from live aliases (BLUE)
+          BLUE_INGEST=$(aws lambda get-alias \
+            --function-name ${INGEST_FUNCTION} \
+            --name live \
+            --region ${AWS_REGION} \
+            --query 'FunctionVersion' \
+            --output text)
+          
+          BLUE_QUERY=$(aws lambda get-alias \
+            --function-name ${QUERY_FUNCTION} \
+            --name live \
+            --region ${AWS_REGION} \
+            --query 'FunctionVersion' \
+            --output text)
+          
+          BLUE_PROCESSOR=$(aws lambda get-alias \
+            --function-name ${PROCESSOR_FUNCTION} \
+            --name live \
+            --region ${AWS_REGION} \
+            --query 'FunctionVersion' \
+            --output text)
+          
+          # Save to outputs for rollback
+          echo "blue_ingest_version=$BLUE_INGEST" >> $GITHUB_OUTPUT
+          echo "blue_query_version=$BLUE_QUERY" >> $GITHUB_OUTPUT
+          echo "blue_processor_version=$BLUE_PROCESSOR" >> $GITHUB_OUTPUT
+          
+          echo "BLUE versions saved:"
+          echo "  Ingest: $BLUE_INGEST"
+          echo "  Query: $BLUE_QUERY"
+          echo "  Processor: $BLUE_PROCESSOR"
+
+      - name: Switch to GREEN (update live alias BEFORE tests)
+        id: switch
+        env:
+          AWS_REGION: ${{ vars.AWS_REGION || 'us-east-1' }}
+          INGEST_FUNCTION: ${{ needs.deploy-aws-green.outputs.ingest_function }}
+          QUERY_FUNCTION: ${{ needs.deploy-aws-green.outputs.query_function }}
+          PROCESSOR_FUNCTION: ${{ needs.deploy-aws-green.outputs.processor_function }}
+          GREEN_INGEST_VERSION: ${{ needs.deploy-aws-green.outputs.ingest_version }}
+          GREEN_QUERY_VERSION: ${{ needs.deploy-aws-green.outputs.query_version }}
+          GREEN_PROCESSOR_VERSION: ${{ needs.deploy-aws-green.outputs.processor_version }}
+        run: |
+          echo "Switching live aliases to GREEN versions (BEFORE running tests)..."
+          echo "This ensures tests validate the actual code that will remain live."
+          echo ""
+          
+          # Update live alias to point to GREEN versions
+          aws lambda update-alias \
+            --function-name ${INGEST_FUNCTION} \
+            --name live \
+            --function-version ${GREEN_INGEST_VERSION} \
+            --region ${AWS_REGION}
+          echo "✅ Ingest alias updated to GREEN version ${GREEN_INGEST_VERSION}"
+          
+          aws lambda update-alias \
+            --function-name ${QUERY_FUNCTION} \
+            --name live \
+            --function-version ${GREEN_QUERY_VERSION} \
+            --region ${AWS_REGION}
+          echo "✅ Query alias updated to GREEN version ${GREEN_QUERY_VERSION}"
+          
+          aws lambda update-alias \
+            --function-name ${PROCESSOR_FUNCTION} \
+            --name live \
+            --function-version ${GREEN_PROCESSOR_VERSION} \
+            --region ${AWS_REGION}
+          echo "✅ Processor alias updated to GREEN version ${GREEN_PROCESSOR_VERSION}"
+          
+          echo ""
+          echo "✅ All aliases now point to GREEN"
+          echo "Next: Run integration tests to validate GREEN deployment"
 
       - name: Run integration tests against GREEN
         run: npm run test:post-deploy
@@ -503,65 +610,17 @@ jobs:
           TEST_RETRY_DELAY_MS: '2000'
           TEST_REQUEST_TIMEOUT_MS: '10000'
 
-      - name: IaC security scan
-        run: |
-          # Run Terraform security checks
-          echo "Running IaC security scan..."
-          # Could use tools like tfsec, checkov, etc.
-
-      - name: Switch to GREEN (update live alias)
-        id: switch
+      - name: Verify GREEN deployment success
         env:
           AWS_REGION: ${{ vars.AWS_REGION || 'us-east-1' }}
           INGEST_FUNCTION: ${{ needs.deploy-aws-green.outputs.ingest_function }}
           QUERY_FUNCTION: ${{ needs.deploy-aws-green.outputs.query_function }}
           PROCESSOR_FUNCTION: ${{ needs.deploy-aws-green.outputs.processor_function }}
-          INGEST_VERSION: ${{ needs.deploy-aws-green.outputs.ingest_version }}
-          QUERY_VERSION: ${{ needs.deploy-aws-green.outputs.query_version }}
-          PROCESSOR_VERSION: ${{ needs.deploy-aws-green.outputs.processor_version }}
+          GREEN_INGEST_VERSION: ${{ needs.deploy-aws-green.outputs.ingest_version }}
+          GREEN_QUERY_VERSION: ${{ needs.deploy-aws-green.outputs.query_version }}
+          GREEN_PROCESSOR_VERSION: ${{ needs.deploy-aws-green.outputs.processor_version }}
         run: |
-          # Update live alias to point to each function's specific version
-          echo "Updating aliases to GREEN versions..."
-          
-          aws lambda update-alias \
-            --function-name ${INGEST_FUNCTION} \
-            --name live \
-            --function-version ${INGEST_VERSION} \
-            --region ${AWS_REGION}
-          echo "✅ Ingest alias updated to version ${INGEST_VERSION}"
-          
-          aws lambda update-alias \
-            --function-name ${QUERY_FUNCTION} \
-            --name live \
-            --function-version ${QUERY_VERSION} \
-            --region ${AWS_REGION}
-          echo "✅ Query alias updated to version ${QUERY_VERSION}"
-          
-          aws lambda update-alias \
-            --function-name ${PROCESSOR_FUNCTION} \
-            --name live \
-            --function-version ${PROCESSOR_VERSION} \
-            --region ${AWS_REGION}
-          echo "✅ Processor alias updated to version ${PROCESSOR_VERSION}"
-          
-          echo ""
-          echo "✅ Traffic switched to GREEN"
-          echo "  Ingest: version ${INGEST_VERSION}"
-          echo "  Query: version ${QUERY_VERSION}"
-          echo "  Processor: version ${PROCESSOR_VERSION}"
-          echo "Region: ${AWS_REGION}"
-
-      - name: Verify alias versions (sanity check)
-        env:
-          AWS_REGION: ${{ vars.AWS_REGION || 'us-east-1' }}
-          INGEST_FUNCTION: ${{ needs.deploy-aws-green.outputs.ingest_function }}
-          QUERY_FUNCTION: ${{ needs.deploy-aws-green.outputs.query_function }}
-          PROCESSOR_FUNCTION: ${{ needs.deploy-aws-green.outputs.processor_function }}
-          EXPECTED_INGEST_VERSION: ${{ needs.deploy-aws-green.outputs.ingest_version }}
-          EXPECTED_QUERY_VERSION: ${{ needs.deploy-aws-green.outputs.query_version }}
-          EXPECTED_PROCESSOR_VERSION: ${{ needs.deploy-aws-green.outputs.processor_version }}
-        run: |
-          echo "Verifying alias versions..."
+          echo "✅ Tests passed - verifying GREEN deployment..."
           
           # Get actual versions from aliases
           ACTUAL_INGEST=$(aws lambda get-alias \
@@ -585,8 +644,8 @@ jobs:
             --query 'FunctionVersion' \
             --output text)
           
-          # Verify versions match
-          echo "Expected vs Actual:"
+          # Verify versions match GREEN
+          echo "Expected GREEN vs Actual:"
           echo "  Ingest: ${EXPECTED_INGEST_VERSION} vs ${ACTUAL_INGEST}"
           echo "  Query: ${EXPECTED_QUERY_VERSION} vs ${ACTUAL_QUERY}"
           echo "  Processor: ${EXPECTED_PROCESSOR_VERSION} vs ${ACTUAL_PROCESSOR}"
@@ -617,12 +676,47 @@ jobs:
           echo ""
           echo "✅ Sanity check passed: All aliases point to correct versions"
 
-      - name: Rollback on failure
+      - name: Rollback to BLUE on failure
         if: failure()
+        env:
+          AWS_REGION: ${{ vars.AWS_REGION || 'us-east-1' }}
+          INGEST_FUNCTION: ${{ needs.deploy-aws-green.outputs.ingest_function }}
+          QUERY_FUNCTION: ${{ needs.deploy-aws-green.outputs.query_function }}
+          PROCESSOR_FUNCTION: ${{ needs.deploy-aws-green.outputs.processor_function }}
+          BLUE_INGEST_VERSION: ${{ steps.save-blue.outputs.blue_ingest_version }}
+          BLUE_QUERY_VERSION: ${{ steps.save-blue.outputs.blue_query_version }}
+          BLUE_PROCESSOR_VERSION: ${{ steps.save-blue.outputs.blue_processor_version }}
         run: |
-          echo "❌ Stage 4 failed - traffic remains on BLUE"
-          echo "To rollback manually, run:"
-          echo "  aws lambda update-alias --function-name <function> --name live --function-version <previous-version>"
+          echo "❌ Tests failed or deployment error - rolling back to BLUE versions..."
+          echo ""
+          
+          # Rollback all aliases to BLUE versions
+          aws lambda update-alias \
+            --function-name ${INGEST_FUNCTION} \
+            --name live \
+            --function-version ${BLUE_INGEST_VERSION} \
+            --region ${AWS_REGION}
+          echo "✅ Ingest alias rolled back to BLUE version ${BLUE_INGEST_VERSION}"
+          
+          aws lambda update-alias \
+            --function-name ${QUERY_FUNCTION} \
+            --name live \
+            --function-version ${BLUE_QUERY_VERSION} \
+            --region ${AWS_REGION}
+          echo "✅ Query alias rolled back to BLUE version ${BLUE_QUERY_VERSION}"
+          
+          aws lambda update-alias \
+            --function-name ${PROCESSOR_FUNCTION} \
+            --name live \
+            --function-version ${BLUE_PROCESSOR_VERSION} \
+            --region ${AWS_REGION}
+          echo "✅ Processor alias rolled back to BLUE version ${BLUE_PROCESSOR_VERSION}"
+          
+          echo ""
+          echo "✅ Rollback complete - traffic restored to BLUE (previous working version)"
+          echo "  Ingest: version ${BLUE_INGEST_VERSION}"
+          echo "  Query: version ${BLUE_QUERY_VERSION}"
+          echo "  Processor: version ${BLUE_PROCESSOR_VERSION}"
 
   # Stage 4: Integration Tests & Blue/Green Switch (Azure)
   switch-azure:

@@ -20,11 +20,10 @@ variable "project_name" {
   default     = "analytics-service"
 }
 
-variable "analytics_write_key" {
-  description = "Secret write key for API authentication"
-  type        = string
-  sensitive   = true
-}
+# NOTE: analytics_write_key variable removed.
+# The secret value is no longer passed through Terraform to avoid storing it in state.
+# The GitHub Actions workflow sets the secret value directly via AWS CLI.
+# See .github/workflows/deploy.yml step "Update Analytics Write Key Secret"
 
 variable "cors_allowed_origins" {
   description = "Comma-separated list of allowed CORS origins"

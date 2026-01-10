@@ -46,14 +46,26 @@ export async function handleProcessor(
   batchLogger.info({ eventCount: events.length }, 'Processing batch');
 
   // Defensive validation - do not assume ingest validated
-  try {
-    validateIngestRequestEnvelope({ schemaVersion: '1.0.0', events });
-  } catch (error) {
-    batchLogger.error({ err: error }, 'Batch failed validation');
+  const validationResult = validateIngestRequestEnvelope({ schemaVersion: '1.0.0', events });
+  
+  if (!validationResult.success) {
+    // Poison message - log structured warning and reject without processing
+    batchLogger.warn(
+      {
+        validationErrors: validationResult.error.issues,
+        eventCount: events.length,
+        batchId,
+      },
+      'Batch failed validation - treating as poison message'
+    );
+    
     return {
       processed: 0,
       failed: events.length,
-      errors: [{ eventId: 'batch', error: 'Batch validation failed' }],
+      errors: [{ 
+        eventId: 'batch', 
+        error: `Validation failed: ${validationResult.error.issues[0]?.message || 'Invalid batch format'}` 
+      }],
     };
   }
 

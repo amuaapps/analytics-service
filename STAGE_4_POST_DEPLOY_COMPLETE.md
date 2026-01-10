@@ -20,12 +20,16 @@ Stage 3: Deploy GREEN
          ↓
 Stage 4: Test & Switch
          - Get API Gateway URL
+         - Save current BLUE alias versions (for rollback)
+         - Switch "live" alias to GREEN ⚠️ BEFORE tests
          - Run post-deploy harness against GREEN ✅
-         - If tests pass → Update "live" alias to GREEN
-         - If tests fail → Keep "live" on BLUE (automatic rollback)
+         - If tests pass → Keep "live" on GREEN
+         - If tests fail → Rollback "live" to BLUE (automatic)
          ↓
-Production: GREEN is live
+Production: GREEN is live (if tests passed)
 ```
+
+**Key Change:** Aliases are switched to GREEN **before** tests run, ensuring tests validate the actual code that will remain live. This prevents testing BLUE while thinking it's GREEN.
 
 ### Azure Slot-Based Deployment Flow
 
@@ -65,20 +69,32 @@ Production: GREEN is live
   id: get-url
   env:
     AWS_REGION: ${{ vars.AWS_REGION || 'us-east-1' }}
-    PROJECT_NAME: analytics-service
     ENVIRONMENT: ${{ needs.setup.outputs.environment }}
   run: |
-    API_URL=$(aws apigatewayv2 get-apis \
-      --region ${AWS_REGION} \
-      --query "Items[?Name=='${PROJECT_NAME}-api-${ENVIRONMENT}'].ApiEndpoint | [0]" \
-      --output text)
+    # Get the complete invoke URL from Terraform output (includes stage path)
+    cd infra/aws
+    API_URL=$(terraform output -raw api_gateway_url)
+    cd ../..
+    
     echo "api_url=$API_URL" >> $GITHUB_OUTPUT
-    echo "API Gateway URL: $API_URL (Region: ${AWS_REGION})"
+    echo "API Gateway URL: $API_URL"
+    echo "Note: URL includes stage path (/${ENVIRONMENT})"
 ```
 
-**Purpose:** Dynamically retrieve the API Gateway endpoint for the environment
+**Purpose:** Retrieve the complete API Gateway invoke URL from Terraform output
 
-**Output:** `api_url` - Used by integration tests
+**Why Terraform Output:**
+- ✅ `aws_apigatewayv2_stage.main.invoke_url` includes the stage path automatically
+- ✅ Format: `https://{api-id}.execute-api.{region}.amazonaws.com/{stage}`
+- ✅ No need to manually append `/${ENVIRONMENT}` - Terraform handles it
+- ✅ Matches exactly what the HTTP API stage exposes
+
+**Output:** `api_url` - Complete invoke URL used by integration tests
+
+**Example URLs:**
+- Dev: `https://abc123.execute-api.us-east-1.amazonaws.com/dev`
+- Staging: `https://abc123.execute-api.us-east-1.amazonaws.com/staging`
+- Prod: `https://abc123.execute-api.us-east-1.amazonaws.com/prod`
 
 ### Step 2: Run Integration Tests Against GREEN
 
@@ -202,24 +218,32 @@ Production: GREEN is live
 - Compares to expected versions from deploy step
 - Fails if any mismatch detected
 
-### Step 5: Rollback on Failure
+### Step 5: Rollback to BLUE on Failure
 
 ```yaml
-- name: Rollback on failure
+- name: Rollback to BLUE on failure
   if: failure()
+  env:
+    BLUE_INGEST_VERSION: ${{ steps.save-blue.outputs.blue_ingest_version }}
+    BLUE_QUERY_VERSION: ${{ steps.save-blue.outputs.blue_query_version }}
+    BLUE_PROCESSOR_VERSION: ${{ steps.save-blue.outputs.blue_processor_version }}
   run: |
-    echo "❌ Stage 4 failed - traffic remains on BLUE"
-    echo "To rollback manually, run:"
-    echo "  aws lambda update-alias --function-name <function> --name live --function-version <previous-version>"
+    # Rollback all aliases to BLUE versions
+    aws lambda update-alias --function-name ${INGEST_FUNCTION} --name live --function-version ${BLUE_INGEST_VERSION}
+    aws lambda update-alias --function-name ${QUERY_FUNCTION} --name live --function-version ${BLUE_QUERY_VERSION}
+    aws lambda update-alias --function-name ${PROCESSOR_FUNCTION} --name live --function-version ${BLUE_PROCESSOR_VERSION}
+    
+    echo "✅ Rollback complete - traffic restored to BLUE"
 ```
 
-**Trigger:** Runs only if any previous step fails
+**Trigger:** Runs only if any previous step fails (tests or verification)
 
 **Behavior:**
-- **Automatic:** Traffic stays on BLUE (no alias update occurred)
-- **Manual:** Provides rollback command if needed
+- **Automatic:** Restores all aliases to saved BLUE versions
+- **Fast:** Rollback completes in seconds
+- **Safe:** Uses saved versions from Step 2
 
-**Key Point:** If tests fail, the alias update step never runs, so traffic automatically remains on the previous (BLUE) version
+**Key Point:** Since aliases were switched to GREEN before tests, a failure requires active rollback to BLUE
 
 ## Stage 4 Implementation (Azure)
 
@@ -646,18 +670,25 @@ aws lambda get-function-configuration \
 
 **Possible Causes:**
 1. API Gateway not deployed
-2. API name doesn't match expected pattern
+2. Terraform output not available
 3. Wrong AWS region
 
 **Fix:**
 ```bash
-# List APIs
-aws apigatewayv2 get-apis --region us-east-1
-
 # Check Terraform outputs
 cd infra/aws
-terraform output
+terraform output api_gateway_url
+
+# Verify API Gateway exists
+aws apigatewayv2 get-apis --region us-east-1
+
+# Verify stage exists
+aws apigatewayv2 get-stages \
+  --api-id <api-id> \
+  --region us-east-1
 ```
+
+**Note:** The workflow now uses `terraform output -raw api_gateway_url` which returns the complete invoke URL including the stage path (e.g., `https://abc123.execute-api.us-east-1.amazonaws.com/dev`).
 
 ## Future Enhancements
 
