@@ -61,9 +61,6 @@ param corsAllowedOrigins string
 @description('Log level')
 param logLevel string
 
-@description('Function App SKU')
-param sku string
-
 @description('Maximum payload size in bytes')
 param maxPayloadSizeBytes int
 
@@ -187,15 +184,15 @@ resource functionApp 'Microsoft.Web/sites@2022-09-01' = {
         // Limits
         {
           name: 'MAX_PAYLOAD_SIZE_BYTES'
-          value: '1048576'
+          value: string(maxPayloadSizeBytes)
         }
         {
           name: 'MAX_EVENTS_PER_BATCH'
-          value: '100'
+          value: string(maxEventsPerBatch)
         }
         {
           name: 'MAX_QUERY_LIMIT'
-          value: '200'
+          value: string(maxQueryLimit)
         }
       ]
       cors: {
@@ -303,15 +300,15 @@ resource stagingSlot 'Microsoft.Web/sites/slots@2022-09-01' = {
         // Limits
         {
           name: 'MAX_PAYLOAD_SIZE_BYTES'
-          value: '1048576'
+          value: string(maxPayloadSizeBytes)
         }
         {
           name: 'MAX_EVENTS_PER_BATCH'
-          value: '100'
+          value: string(maxEventsPerBatch)
         }
         {
           name: 'MAX_QUERY_LIMIT'
-          value: '200'
+          value: string(maxQueryLimit)
         }
       ]
       cors: {

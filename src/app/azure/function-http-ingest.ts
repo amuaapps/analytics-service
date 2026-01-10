@@ -122,6 +122,14 @@ export function createAzureFunctionIngestHandler(deps: AzureFunctionIngestDepend
     const requestId: string = context.invocationId;
 
     try {
+      // Validate write key (imported dynamically to avoid circular deps)
+      const { validateWriteKey } = await import('./auth-middleware.js');
+      const authResult = await validateWriteKey(request);
+      if (!authResult.valid) {
+        deps.logger.warn({ invocationId: requestId }, 'Authentication failed');
+        return authResult.error!;
+      }
+
       const coreRequest = await createCoreRequest(request);
       const result = await handleIngest(coreRequest, deps);
       return createSuccessResponse(result);
