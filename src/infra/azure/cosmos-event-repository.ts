@@ -33,10 +33,11 @@ export class CosmosEventRepository implements EventRepository {
 
   async storeEvents(events: StoredEvent[]): Promise<void> {
     try {
-      // Use bulk operations for efficiency
+      // Use bulk Upsert operations for idempotency (at-least-once delivery safe)
+      // Upsert will create if not exists, or replace if exists (same as DynamoDB PutItem)
       // Azure Cosmos SDK has overly strict JSONValue types, so we use unknown cast
       const operations = events.map((event) => ({
-        operationType: 'Create' as const,
+        operationType: 'Upsert' as const, // Changed from 'Create' to 'Upsert' for idempotency
         resourceBody: {
           id: event.eventId,
           pk: event.source.appId, // Partition key field
@@ -47,19 +48,38 @@ export class CosmosEventRepository implements EventRepository {
 
       const response = await this.container.items.bulk(operations);
 
-      // Check for failures
+      // Check for real failures (excluding 409 conflicts which shouldn't happen with Upsert)
+      // Upsert returns 200 (OK) for updates and 201 (Created) for new items
       const failures = response.filter((r: { statusCode: number }) => r.statusCode >= 400);
+      
       if (failures.length > 0) {
+        // Log details about failures for debugging
         this.logger.error(
-          { failures, eventCount: events.length },
+          { 
+            failures: failures.map((f: any) => ({
+              statusCode: f.statusCode,
+              resourceBody: f.resourceBody,
+            })),
+            eventCount: events.length,
+            failureCount: failures.length,
+          },
           'Some events failed to store in Cosmos DB'
         );
-        throw new Error(`Failed to store ${failures.length} events`);
+        throw new Error(`Failed to store ${failures.length} of ${events.length} events`);
       }
 
+      // Count creates vs updates for observability
+      const created = response.filter((r: { statusCode: number }) => r.statusCode === 201).length;
+      const updated = response.filter((r: { statusCode: number }) => r.statusCode === 200).length;
+
       this.logger.info(
-        { eventCount: events.length, containerId: this.container.id },
-        'Stored events in Cosmos DB'
+        { 
+          eventCount: events.length,
+          created,
+          updated,
+          containerId: this.container.id,
+        },
+        'Stored events in Cosmos DB (idempotent upsert)'
       );
     } catch (error) {
       this.logger.error(

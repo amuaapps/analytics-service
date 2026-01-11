@@ -102,9 +102,9 @@ async function ingestEvent(eventId: string): Promise<IngestResponse> {
         },
         actor: {
           userId: TEST_USER_ID,
-          sessionId: TEST_SESSION_ID,
         },
         context: {
+          sessionId: TEST_SESSION_ID,
           testRun: true,
         } as Record<string, unknown>,
         properties: {

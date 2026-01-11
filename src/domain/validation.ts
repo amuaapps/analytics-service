@@ -29,8 +29,11 @@ const actorSchema = z
   });
 
 // Context schema uses fixed limits (not configurable)
+// Uses passthrough() to preserve unknown keys for extensibility
+// while validating known fields
 const contextSchema = z
   .object({
+    sessionId: z.string().max(255).optional(),
     locale: z.string().max(50).optional(),
     timezone: z.string().max(100).optional(),
     page: z
@@ -44,6 +47,7 @@ const contextSchema = z
     userAgent: z.string().max(2048).optional(),
     device: z.record(z.unknown()).optional(),
   })
+  .passthrough() // Preserve unknown keys for extensibility (e.g., testRun, ip, custom metadata)
   .optional();
 
 const consentSchema = z
@@ -225,6 +229,29 @@ export const VALIDATION_PATTERNS = {
 export function createValidateIngestRequestEnvelope(limits: LimitsConfig) {
   const schema = createIngestRequestEnvelopeSchema(limits);
   return (data: unknown) => {
-    return schema.safeParse(data);
+    const result = schema.safeParse(data);
+    
+    // Normalize actor.sessionId to context.sessionId for backward compatibility
+    if (result.success) {
+      result.data.events = result.data.events.map((event) => {
+        // If actor.sessionId is present but context.sessionId is not, move it
+        if (event.actor.sessionId && !event.context?.sessionId) {
+          return {
+            ...event,
+            context: {
+              ...event.context,
+              sessionId: event.actor.sessionId,
+            },
+            actor: {
+              ...event.actor,
+              sessionId: undefined, // Remove from actor after moving
+            },
+          };
+        }
+        return event;
+      });
+    }
+    
+    return result;
   };
 }

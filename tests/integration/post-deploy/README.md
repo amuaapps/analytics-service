@@ -90,7 +90,9 @@ The harness uses **non-sensitive test data** with no PII:
 {
   appId: "test-app-post-deploy",
   userId: "test-user-12345",
-  sessionId: "session-{timestamp}",
+  context: {
+    sessionId: "session-{timestamp}"  // Canonical location
+  },
   eventId: "event-{timestamp}-{random}",
   type: "track",
   name: "post_deploy_test",
@@ -135,7 +137,7 @@ The harness validates the following contract:
 - `userId` matches test user
 
 **Context:**
-- `sessionId` matches test session
+- `sessionId` matches test session (stored in `context.sessionId`)
 - `testRun` is true
 
 **Properties:**

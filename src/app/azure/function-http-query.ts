@@ -6,6 +6,7 @@ import type { Logger } from '../../utils/logger.js';
 import { getOrGenerateRequestId } from '../../utils/correlation.js';
 import { validateQueryEventsInput } from '../../domain/query-validation.js';
 import type { QueryEventsInput } from '../../domain/query-types.js';
+import { mapStoredEventToApiEvent } from '../../domain/event-mapper.js';
 
 export interface AzureFunctionQueryDependencies {
   logger: Logger;
@@ -77,12 +78,22 @@ function createSuccessResponse(result: {
   cursor?: string;
   hasMore: boolean;
 }): HttpResponseInit {
+  // Map stored events to API events (remove internal metadata)
+  // Type assertion safe here because core handler returns StoredEvent[]
+  const apiEvents = result.events.map((event) => mapStoredEventToApiEvent(event as any));
+
+  // Build response matching spec format (items + nextCursor)
+  const response = {
+    items: apiEvents,
+    ...(result.cursor ? { nextCursor: result.cursor } : {}),
+  };
+
   return {
     status: 200,
     headers: {
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify(result),
+    body: JSON.stringify(response),
   };
 }
 

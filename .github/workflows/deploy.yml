@@ -163,8 +163,8 @@ jobs:
       - name: Format check
         run: npm run format:check
 
-      - name: Run unit tests with coverage
-        run: npm run test:coverage
+      - name: Run CI tests with coverage
+        run: npm run test:ci
 
       - name: Check coverage thresholds
         run: |

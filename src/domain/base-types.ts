@@ -18,10 +18,11 @@ export interface Source {
 export interface Actor {
   userId?: string;
   anonymousId?: string;
-  sessionId?: string;
+  sessionId?: string; // Deprecated: use context.sessionId instead. Kept for backward compatibility.
 }
 
 export interface Context {
+  sessionId?: string; // Canonical location for session identifier
   locale?: string;
   timezone?: string;
   page?: {
@@ -32,6 +33,9 @@ export interface Context {
   };
   userAgent?: string;
   device?: Record<string, unknown>;
+  // Allow additional properties for extensibility (e.g., testRun, ip, custom metadata)
+  // while maintaining type safety for known fields
+  [key: string]: unknown;
 }
 
 export interface Consent {

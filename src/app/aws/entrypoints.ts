@@ -15,6 +15,7 @@ import { SQSQueuePublisher } from '../../infra/aws/sqs-queue-publisher.js';
 import { DynamoDBEventRepository } from '../../infra/aws/dynamodb-event-repository.js';
 import { S3RawEventStore } from '../../infra/aws/s3-raw-event-store.js';
 import { loadAnalyticsWriteKey } from '../../config/secrets.js';
+import { parseWriteKeys, validateWriteKey } from '../middleware/auth.js';
 
 // Cache for write key (loaded once per Lambda instance)
 let cachedWriteKey: string | null = null;
@@ -38,7 +39,7 @@ async function getWriteKey(): Promise<string> {
   return cachedWriteKey;
 }
 
-// Validate authentication with constant-time comparison
+// Validate authentication using shared helpers (supports key rotation)
 async function validateAuth(event: APIGatewayProxyEvent): Promise<void> {
   const authHeader = event.headers['x-analytics-write-key'] || event.headers['X-Analytics-Write-Key'];
 
@@ -46,21 +47,12 @@ async function validateAuth(event: APIGatewayProxyEvent): Promise<void> {
     throw new Error('AUTHENTICATION_ERROR: Missing or invalid write key');
   }
 
-  const validKey = await getWriteKey();
+  const writeKeyConfig = await getWriteKey();
+  const validKeys = parseWriteKeys(writeKeyConfig);
   
-  // Constant-time comparison to prevent timing attacks
-  if (validKey.length !== authHeader.length) {
-    throw new Error('AUTHENTICATION_ERROR: Invalid write key');
-  }
+  const isValid = validateWriteKey(authHeader, validKeys);
   
-  let matches = true;
-  for (let i = 0; i < validKey.length; i++) {
-    if (validKey.charCodeAt(i) !== authHeader.charCodeAt(i)) {
-      matches = false;
-    }
-  }
-  
-  if (!matches) {
+  if (!isValid) {
     throw new Error('AUTHENTICATION_ERROR: Invalid write key');
   }
 }

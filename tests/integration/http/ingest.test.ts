@@ -93,6 +93,7 @@ describe('POST /api/v1/events - Integration', () => {
       expect(response.body).toEqual({
         accepted: true,
         eventCount: 1,
+        batchId: expect.any(String),
       });
 
       expect(response.headers['x-request-id']).toBeDefined();

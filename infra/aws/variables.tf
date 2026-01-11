@@ -61,11 +61,10 @@ variable "dynamodb_write_capacity" {
   default     = 5
 }
 
-variable "event_retention_days" {
-  description = "Number of days to retain events in DynamoDB (TTL)"
-  type        = number
-  default     = 90
-}
+# NOTE: DynamoDB TTL is calculated per-event in application code (src/config/retention.ts)
+# using the event's occurredAt timestamp + 365 days. This variable is not used by Terraform.
+# Retention policy: 12 months (365 days) from event occurrence.
+# See: TTL_RETENTION_COMPLETE.md for implementation details.
 
 # S3 Configuration
 variable "raw_event_retention_days" {

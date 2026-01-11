@@ -1,14 +1,17 @@
 import type { HttpRequest, HttpResponseInit } from '@azure/functions';
 import { getOptionalEnvVar } from '../../config/env-loader.js';
+import { parseWriteKeys, validateWriteKey as validateWriteKeyShared } from '../middleware/auth.js';
 
 /**
- * Validates the x-analytics-write-key header against the configured write key
+ * Validates the x-analytics-write-key header against the configured write key(s)
  * Supports both direct env var and Azure Key Vault reference
+ * Supports comma-separated keys for rotation
+ * Uses constant-time comparison to prevent timing attacks
  */
 export async function validateWriteKey(request: HttpRequest): Promise<{ valid: boolean; error?: HttpResponseInit }> {
-  const writeKey = getOptionalEnvVar('ANALYTICS_WRITE_KEY');
+  const writeKeyConfig = getOptionalEnvVar('ANALYTICS_WRITE_KEY');
   
-  if (!writeKey) {
+  if (!writeKeyConfig) {
     return {
       valid: false,
       error: {
@@ -42,7 +45,11 @@ export async function validateWriteKey(request: HttpRequest): Promise<{ valid: b
     };
   }
 
-  if (providedKey !== writeKey) {
+  // Parse comma-separated keys and validate using shared helper
+  const validKeys = parseWriteKeys(writeKeyConfig);
+  const isValid = validateWriteKeyShared(providedKey, validKeys);
+
+  if (!isValid) {
     return {
       valid: false,
       error: {

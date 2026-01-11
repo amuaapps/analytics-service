@@ -70,6 +70,7 @@ function createSuccessResponse(result: { accepted: boolean; eventCount: number; 
     body: JSON.stringify({
       accepted: result.accepted,
       eventCount: result.eventCount,
+      batchId: result.batchId,
     }),
   };
 }

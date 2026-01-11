@@ -99,6 +99,7 @@ export function createServer(deps: ServerDependencies): Express {
           res.status(202).json({
             accepted: result.accepted,
             eventCount: result.eventCount,
+            batchId: result.batchId,
           });
         })
         .catch((error: unknown) => {

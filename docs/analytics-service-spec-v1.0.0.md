@@ -88,13 +88,14 @@ At least one of `userId` or `anonymousId` **must** be present.
 |---|---|---:|---|
 | `userId` | string | ❌ | Authenticated user identifier |
 | `anonymousId` | string | ❌ | Stable per-device/session identifier (unauth traffic) |
-| `sessionId` | string | ❌ | Client session identifier |
+| `sessionId` | string | ❌ | **Deprecated:** Use `context.sessionId` instead. Accepted for backward compatibility and automatically normalized to `context.sessionId` during ingestion. |
 
 ### 1.9 `context` object (optional)
 Used for lightweight runtime context. Do not dump large browser/device objects.
 
 | Field | Type | Required | Notes |
 |---|---|---:|---|
+| `sessionId` | string | ❌ | **Canonical location** for client session identifier. Used for session-based queries and filtering. |
 | `locale` | string | ❌ | e.g. `en-US` |
 | `timezone` | string | ❌ | e.g. `Europe/Berlin` |
 | `page.url` | string | ❌ | Full URL |
@@ -152,7 +153,35 @@ Examples:
 - Max array length: 100
 - Max per-event payload size target: 32 KB (service should enforce a hard cap)
 
-### 1.13 Responses
+### 1.13 Ingest response
+
+**Success (202 Accepted):**
+```json
+{
+  "accepted": true,
+  "eventCount": 1,
+  "batchId": "batch-1234567890-abcdef"
+}
+```
+
+| Field | Type | Description |
+|---|---|---|
+| `accepted` | boolean | Always `true` for successful ingestion |
+| `eventCount` | number | Number of events in the batch |
+| `batchId` | string | Unique identifier for this batch (for tracking/debugging) |
+
+**Error (4xx/5xx):**
+```json
+{
+  "error": {
+    "code": "VALIDATION_ERROR",
+    "message": "..."
+  },
+  "requestId": "..."
+}
+```
+
+### 1.14 Responses
 - **202 Accepted** on success (events enqueued)
 - **400** on validation errors (reject entire batch)
 - **401** on missing/invalid write key
@@ -277,7 +306,7 @@ Raw storage captures ingested events in an immutable, cheap store for:
 | `names` | string list | ❌ | Filter by event name(s) |
 | `userId` | string | ❌ | Filter by actor user |
 | `anonymousId` | string | ❌ | Filter by actor anonymous |
-| `sessionId` | string | ❌ | Filter by session |
+| `sessionId` | string | ❌ | Filter by session (queries `context.sessionId`) |
 | `limit` | number | ❌ | Default 50; max 200 |
 | `cursor` | string | ❌ | Opaque pagination cursor |
 | `sort` | string | ❌ | `asc` or `desc` (default `desc`) |

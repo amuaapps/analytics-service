@@ -36,8 +36,8 @@ param cosmosDbThroughput int = 400
 @description('Enable Cosmos DB autoscale')
 param cosmosDbAutoscale bool = true
 
-@description('Event retention in days (TTL)')
-param eventRetentionDays int = 90
+@description('Event retention in days (TTL) - 12 months per retention policy')
+param eventRetentionDays int = 365
 
 @description('Raw event retention in days (blob lifecycle)')
 param rawEventRetentionDays int = 365
