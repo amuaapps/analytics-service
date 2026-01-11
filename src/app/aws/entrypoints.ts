@@ -133,9 +133,9 @@ export async function ingestHandler(
         throw new Error('SQS_QUEUE_URL environment variable is required');
       }
 
-      const bucketName = process.env.S3_RAW_EVENTS_BUCKET;
+      const bucketName = process.env.S3_RAW_BUCKET_NAME;
       if (!bucketName) {
-        throw new Error('S3_RAW_EVENTS_BUCKET environment variable is required');
+        throw new Error('S3_RAW_BUCKET_NAME environment variable is required');
       }
 
       const region = process.env.AWS_REGION || 'us-east-1';

@@ -29,6 +29,23 @@ resource "aws_iam_role_policy" "ingest_lambda" {
     Version = "2012-10-17"
     Statement = [
       {
+        Sid    = "AllowSecretsManagerRead"
+        Effect = "Allow"
+        Action = [
+          "secretsmanager:GetSecretValue",
+          "secretsmanager:DescribeSecret"
+        ]
+        Resource = aws_secretsmanager_secret.analytics_write_key.arn
+      },
+      {
+        Sid    = "AllowS3WriteRawBatch"
+        Effect = "Allow"
+        Action = [
+          "s3:PutObject"
+        ]
+        Resource = "${aws_s3_bucket.raw_events.arn}/*"
+      },
+      {
         Sid    = "AllowSQSSendMessage"
         Effect = "Allow"
         Action = [
@@ -147,6 +164,14 @@ resource "aws_iam_role_policy" "processor_lambda" {
         Resource = aws_sqs_queue.events.arn
       },
       {
+        Sid    = "AllowS3ReadRawBatch"
+        Effect = "Allow"
+        Action = [
+          "s3:GetObject"
+        ]
+        Resource = "${aws_s3_bucket.raw_events.arn}/*"
+      },
+      {
         Sid    = "AllowDynamoDBWrite"
         Effect = "Allow"
         Action = [
@@ -155,15 +180,6 @@ resource "aws_iam_role_policy" "processor_lambda" {
           "dynamodb:GetItem"
         ]
         Resource = aws_dynamodb_table.events.arn
-      },
-      {
-        Sid    = "AllowS3Write"
-        Effect = "Allow"
-        Action = [
-          "s3:PutObject",
-          "s3:PutObjectAcl"
-        ]
-        Resource = "${aws_s3_bucket.raw_events.arn}/*"
       },
       {
         Sid    = "AllowCloudWatchLogs"

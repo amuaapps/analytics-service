@@ -67,7 +67,7 @@ resource "aws_s3_bucket_lifecycle_configuration" "raw_events" {
   }
 }
 
-# Bucket policy - only allow access from Lambda execution role
+# Bucket policy - allow access from Lambda execution roles
 resource "aws_s3_bucket_policy" "raw_events" {
   bucket = aws_s3_bucket.raw_events.id
 
@@ -75,14 +75,24 @@ resource "aws_s3_bucket_policy" "raw_events" {
     Version = "2012-10-17"
     Statement = [
       {
-        Sid    = "AllowLambdaWrite"
+        Sid    = "AllowIngestLambdaWrite"
+        Effect = "Allow"
+        Principal = {
+          AWS = aws_iam_role.ingest_lambda.arn
+        }
+        Action = [
+          "s3:PutObject"
+        ]
+        Resource = "${aws_s3_bucket.raw_events.arn}/*"
+      },
+      {
+        Sid    = "AllowProcessorLambdaRead"
         Effect = "Allow"
         Principal = {
           AWS = aws_iam_role.processor_lambda.arn
         }
         Action = [
-          "s3:PutObject",
-          "s3:PutObjectAcl"
+          "s3:GetObject"
         ]
         Resource = "${aws_s3_bucket.raw_events.arn}/*"
       },

@@ -29,6 +29,7 @@ resource "aws_lambda_function" "ingest" {
       NODE_ENV                = var.environment
       LOG_LEVEL               = var.log_level
       SQS_QUEUE_URL           = aws_sqs_queue.events.url
+      S3_RAW_BUCKET_NAME      = aws_s3_bucket.raw_events.bucket
       ANALYTICS_WRITE_KEY_SECRET_ARN = aws_secretsmanager_secret.analytics_write_key.arn
       CORS_ALLOWED_ORIGINS    = var.cors_allowed_origins
       MAX_PAYLOAD_SIZE_BYTES  = var.max_payload_size_bytes
