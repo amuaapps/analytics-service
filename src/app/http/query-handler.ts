@@ -37,19 +37,8 @@ export function createQueryHttpHandler(deps: QueryHttpHandlerDependencies) {
       requestLogger.info({ query: req.query }, 'Query request received');
 
       // Parse and validate query parameters
-      const queryInput = validateQueryEventsInput({
-        appId: req.query.appId,
-        from: req.query.from,
-        to: req.query.to,
-        types: req.query.types ? String(req.query.types).split(',') : undefined,
-        names: req.query.names ? String(req.query.names).split(',') : undefined,
-        userId: req.query.userId,
-        anonymousId: req.query.anonymousId,
-        sessionId: req.query.sessionId,
-        limit: req.query.limit ? parseInt(String(req.query.limit), 10) : undefined,
-        cursor: req.query.cursor,
-        sort: req.query.sort,
-      });
+      // Validation now handles HTTP query string formats (strings, comma-separated, etc.)
+      const queryInput = validateQueryEventsInput(req.query);
 
       // Execute query
       const result = await handleQuery(

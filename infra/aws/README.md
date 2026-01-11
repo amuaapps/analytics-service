@@ -108,19 +108,20 @@ terraform init -backend-config=backend.hcl
 
 ### 2. Create Variables File
 
-Create `terraform.tfvars`:
+Create `terraform.tfvars` (see `terraform.tfvars.example`):
 
 ```hcl
-environment         = "dev"
-aws_region         = "us-east-1"
-project_name       = "analytics-service"
-analytics_write_key = "your-secret-write-key"
+environment  = "dev"
+aws_region   = "us-east-1"
+project_name = "analytics-service"
 
 # Optional: Override defaults
 # dynamodb_read_capacity  = 5
 # dynamodb_write_capacity = 5
 # lambda_memory_size      = 512
 ```
+
+**Note:** The `analytics_write_key` is NOT configured via Terraform variables. It is managed through AWS Secrets Manager and populated by GitHub Actions. See the **Secrets Management** section below.
 
 ### 3. Plan
 
@@ -147,13 +148,15 @@ terraform output
 | `environment` | Environment name (dev, staging, prod) | Yes | - |
 | `aws_region` | AWS region | Yes | - |
 | `project_name` | Project name for resource naming | Yes | - |
-| `analytics_write_key` | Secret write key for API authentication | Yes | - |
 | `dynamodb_read_capacity` | DynamoDB read capacity units | No | 5 |
 | `dynamodb_write_capacity` | DynamoDB write capacity units | No | 5 |
 | `lambda_memory_size` | Lambda memory size in MB | No | 512 |
 | `lambda_timeout` | Lambda timeout in seconds | No | 30 |
-| `event_retention_days` | DynamoDB TTL retention in days | No | 90 |
 | `raw_event_retention_days` | S3 lifecycle retention in days | No | 365 |
+
+**Removed Variables:**
+- `analytics_write_key` - Now managed via AWS Secrets Manager (see Secrets Management section)
+- `event_retention_days` - DynamoDB TTL is calculated per-event in application code (365 days from event occurrence)
 
 ## Outputs
 
@@ -167,6 +170,8 @@ terraform output
 | `s3_bucket_name` | Name of the S3 bucket for raw events |
 | `sqs_queue_url` | URL of the SQS queue |
 | `live_alias_name` | Name of the live Lambda alias |
+| `analytics_write_key_secret_arn` | ARN of the Secrets Manager secret for write key |
+| `analytics_write_key_secret_name` | Name of the Secrets Manager secret for write key |
 
 ## Blue/Green Deployment Process
 
@@ -217,13 +222,57 @@ CloudWatch log groups are created for each Lambda function:
 - `/aws/lambda/analytics-query-${environment}`
 - `/aws/lambda/analytics-processor-${environment}`
 
+## Secrets Management
+
+### Analytics Write Key
+
+The analytics write key is **not** stored in Terraform state or variables. Instead, it is managed through AWS Secrets Manager:
+
+1. **Terraform creates the secret** (without a value):
+   ```hcl
+   resource "aws_secretsmanager_secret" "analytics_write_key" {
+     name_prefix = "${var.environment}-analytics-write-key-"
+     description = "Analytics service write key for ${var.environment} environment"
+   }
+   ```
+
+2. **GitHub Actions populates the secret value**:
+   - The CI/CD pipeline (`.github/workflows/deploy.yml`) sets the actual secret value
+   - Step: "Update Analytics Write Key Secret"
+   - Uses AWS CLI: `aws secretsmanager put-secret-value`
+   - Secret value comes from GitHub repository secret: `ANALYTICS_WRITE_KEY`
+
+3. **Lambda functions read from Secrets Manager**:
+   - Environment variable: `ANALYTICS_WRITE_KEY_SECRET_ARN`
+   - Functions have IAM permissions to read the secret
+   - Secret is cached in application code for performance
+
+### Key Rotation
+
+To rotate the write key:
+
+1. Update the GitHub repository secret `ANALYTICS_WRITE_KEY` with a new value (comma-separated for gradual rotation)
+2. Re-run the deployment workflow
+3. The new value is automatically pushed to Secrets Manager
+4. Lambda functions pick up the new value on next invocation (or restart)
+
+**Example rotation:**
+```bash
+# Step 1: Add new key alongside old key
+ANALYTICS_WRITE_KEY="old-key,new-key"
+
+# Step 2: After clients migrate, remove old key
+ANALYTICS_WRITE_KEY="new-key"
+```
+
 ## Security
 
 - All Lambda functions run with least-privilege IAM roles
 - S3 bucket has encryption enabled (AES-256)
 - DynamoDB has encryption at rest enabled
-- API Gateway requires authentication via write key
+- API Gateway requires authentication via write key (stored in Secrets Manager)
 - No public access to S3 or DynamoDB
+- Secrets Manager secrets are encrypted at rest with AWS KMS
 
 ## Cost Optimization
 

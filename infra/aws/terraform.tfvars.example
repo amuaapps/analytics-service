@@ -2,10 +2,13 @@
 # Copy this file to terraform.tfvars and update with your values
 
 # Required Variables
-environment         = "dev"
-aws_region         = "us-east-1"
-project_name       = "analytics-service"
-analytics_write_key = "your-secret-write-key-here"
+environment  = "dev"
+aws_region   = "us-east-1"
+project_name = "analytics-service"
+
+# NOTE: analytics_write_key is NOT configured here.
+# It is managed via AWS Secrets Manager and populated by GitHub Actions.
+# See README.md "Secrets Management" section for details.
 
 # Optional: CORS Configuration
 cors_allowed_origins = "https://example.com,https://app.example.com"
@@ -17,7 +20,11 @@ log_level = "info"
 dynamodb_billing_mode   = "PAY_PER_REQUEST"  # or "PROVISIONED"
 # dynamodb_read_capacity  = 5  # Only for PROVISIONED mode
 # dynamodb_write_capacity = 5  # Only for PROVISIONED mode
-event_retention_days    = 90
+
+# NOTE: event_retention_days variable removed.
+# DynamoDB TTL is calculated per-event in application code (src/config/retention.ts)
+# using the event's occurredAt timestamp + 365 days (12 months).
+# See TTL_RETENTION_COMPLETE.md for implementation details.
 
 # Optional: S3 Configuration
 raw_event_retention_days   = 365

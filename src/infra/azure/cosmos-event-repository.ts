@@ -92,7 +92,7 @@ export class CosmosEventRepository implements EventRepository {
 
   async queryEvents(input: QueryEventsInput): Promise<QueryEventsResult> {
     try {
-      const { appId, from, to, userId, sessionId, types, names, limit = 50, cursor } = input;
+      const { appId, from, to, userId, anonymousId, sessionId, types, names, limit = 50, cursor } = input;
 
       // Build SQL query - query by pk (partition key) for efficiency
       let query = 'SELECT * FROM c WHERE c.pk = @appId';
@@ -101,12 +101,13 @@ export class CosmosEventRepository implements EventRepository {
       ];
 
       // Add time range filter
+      // 'from' is inclusive (>=), 'to' is exclusive (<) per spec
       if (from) {
         query += ' AND c.occurredAt >= @from';
         parameters.push({ name: '@from', value: from });
       }
       if (to) {
-        query += ' AND c.occurredAt <= @to';
+        query += ' AND c.occurredAt < @to';
         parameters.push({ name: '@to', value: to });
       }
 
@@ -114,6 +115,12 @@ export class CosmosEventRepository implements EventRepository {
       if (userId) {
         query += ' AND c.actor.userId = @userId';
         parameters.push({ name: '@userId', value: userId });
+      }
+
+      // Add anonymousId filter
+      if (anonymousId) {
+        query += ' AND c.actor.anonymousId = @anonymousId';
+        parameters.push({ name: '@anonymousId', value: anonymousId });
       }
 
       // Add session filter

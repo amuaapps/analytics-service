@@ -456,16 +456,25 @@ Stage 4 MUST include:
 - **Integration tests** against GREEN (end-to-end or service-level integration appropriate to the component)
 - **Infra-related security tests** appropriate to the chosen IaC and cloud (e.g., IaC policy checks, configuration validation, post-deploy security assertions)
 
-Switch rule:
+**Switch rule (preferred):**
 - Only if **all** Stage 4 checks pass, the workflow MAY switch traffic from **BLUE → GREEN**.
 
-Failure rule (mandatory):
+**Switch rule (AWS Lambda exception):**
+- For AWS Lambda deployments where API Gateway integrations route only through the `live` alias:
+  - The workflow MAY switch the `live` alias to GREEN **before** running integration tests.
+  - This is acceptable ONLY if:
+    - **Automatic rollback** is implemented: if tests fail, the workflow MUST immediately revert the `live` alias back to BLUE.
+    - **Fast failure**: tests must fail quickly (within seconds/minutes) to minimize user impact.
+    - **Monitoring**: the workflow MUST log the switch and rollback actions clearly.
+  - Rationale: Without a separate "candidate" alias or API Gateway stage, testing GREEN before switching would test BLUE instead.
+
+**Failure rule (mandatory):**
 - If **any** Stage 4 check fails:
   - The workflow MUST **fail**.
   - The workflow MUST ensure traffic remains on **BLUE** (or is switched back to BLUE if a switch partially occurred).
-  - The workflow MUST perform rollback/cleanup actions as defined by the repo’s blue/green mechanism (e.g., revert alias/route weights, swap back slots, revert gateway routing, tear down or disable GREEN where safe).
+  - The workflow MUST perform rollback/cleanup actions as defined by the repo's blue/green mechanism (e.g., revert alias/route weights, swap back slots, revert gateway routing, tear down or disable GREEN where safe).
 
-Observability:
+**Observability:**
 - Stage 4 SHOULD publish test results and infra/security check outputs as artifacts.
 - Stage 4 SHOULD emit a clear, human-readable summary describing why the gate failed and what rollback action was taken.
 

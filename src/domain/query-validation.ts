@@ -7,6 +7,62 @@ const MAX_DATE_RANGE_DAYS = 31;
 
 const eventTypeSchema = z.enum(['track', 'page', 'identify']);
 
+/**
+ * Preprocess HTTP query parameters to normalize them for validation
+ * Handles Express query strings, AWS Lambda parsed params, and Azure Function params
+ */
+function preprocessQueryInput(input: unknown): unknown {
+  if (!input || typeof input !== 'object') {
+    return input;
+  }
+
+  const data = input as Record<string, unknown>;
+  const processed: Record<string, unknown> = { ...data };
+
+  // Coerce limit from string to number if needed
+  if (data.limit !== undefined && data.limit !== null) {
+    if (typeof data.limit === 'string') {
+      const parsed = parseInt(data.limit, 10);
+      processed.limit = isNaN(parsed) ? data.limit : parsed;
+    } else if (typeof data.limit === 'number') {
+      processed.limit = data.limit;
+    }
+  }
+
+  // Normalize types: handle comma-separated string or array
+  if (data.types !== undefined && data.types !== null) {
+    if (typeof data.types === 'string') {
+      processed.types = data.types.split(',').map((t) => t.trim()).filter((t) => t.length > 0);
+    } else if (Array.isArray(data.types)) {
+      processed.types = data.types;
+    }
+  }
+
+  // Normalize names: handle comma-separated string or array
+  if (data.names !== undefined && data.names !== null) {
+    if (typeof data.names === 'string') {
+      processed.names = data.names.split(',').map((n) => n.trim()).filter((n) => n.length > 0);
+    } else if (Array.isArray(data.names)) {
+      processed.names = data.names;
+    }
+  }
+
+  // Normalize sort: ensure it's a valid enum value
+  if (data.sort !== undefined && data.sort !== null) {
+    const sortStr = String(data.sort).toLowerCase();
+    if (sortStr === 'asc' || sortStr === 'desc') {
+      processed.sort = sortStr;
+    }
+  }
+
+  // Default 'to' to now if omitted (matches spec and Azure behavior)
+  if (!data.to && data.from) {
+    processed.to = new Date().toISOString();
+  }
+
+  return processed;
+}
+
 export const queryEventsInputSchema = z
   .object({
     appId: z.string().min(1, 'appId is required'),
@@ -64,12 +120,18 @@ export const queryEventsInputSchema = z
   );
 
 export function validateQueryEventsInput(input: unknown): QueryEventsInput {
-  const validated = queryEventsInputSchema.parse(input);
+  // Preprocess to normalize HTTP query params (strings, comma-separated values, etc.)
+  const preprocessed = preprocessQueryInput(input);
+  
+  // Validate with Zod schema
+  const validated = queryEventsInputSchema.parse(preprocessed);
   
   return {
     ...validated,
     limit: validated.limit ?? DEFAULT_QUERY_LIMIT,
     sort: validated.sort ?? 'desc',
+    // Ensure 'to' is set (should be set by preprocessing if omitted)
+    to: validated.to ?? new Date().toISOString(),
   };
 }
 

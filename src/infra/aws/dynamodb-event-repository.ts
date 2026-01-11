@@ -67,7 +67,7 @@ export class DynamoDBEventRepository implements EventRepository {
 
   async queryEvents(input: QueryEventsInput): Promise<QueryEventsResult> {
     try {
-      const { appId, from, to, userId, sessionId, limit = 50, cursor } = input;
+      const { appId, from, to, userId, anonymousId, sessionId, limit = 50, cursor } = input;
 
       // Determine which index to use and the appropriate sort key attribute
       let indexName: string | undefined;
@@ -148,10 +148,19 @@ export class DynamoDBEventRepository implements EventRepository {
         }
       }
 
+      // Build FilterExpression for anonymousId if provided
+      // DynamoDB doesn't have a GSI for anonymousId, so we use FilterExpression
+      let filterExpression: string | undefined;
+      if (anonymousId) {
+        filterExpression = 'actor.anonymousId = :anonymousId';
+        expressionAttributeValues[':anonymousId'] = anonymousId;
+      }
+
       const command = new QueryCommand({
         TableName: this.tableName,
         IndexName: indexName,
         KeyConditionExpression: keyConditionExpression,
+        FilterExpression: filterExpression,
         ExpressionAttributeValues: marshall(expressionAttributeValues),
         Limit: limit + 1, // Fetch one extra to determine hasMore
         ExclusiveStartKey: exclusiveStartKey ? marshall(exclusiveStartKey) : undefined,
@@ -175,7 +184,7 @@ export class DynamoDBEventRepository implements EventRepository {
       }
 
       this.logger.info(
-        { appId, userId, sessionId, eventCount: events.length, hasMore },
+        { appId, userId, anonymousId, sessionId, eventCount: events.length, hasMore },
         'Queried events from DynamoDB'
       );
 

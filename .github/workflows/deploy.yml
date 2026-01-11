@@ -560,7 +560,7 @@ jobs:
           echo "  Query: $BLUE_QUERY"
           echo "  Processor: $BLUE_PROCESSOR"
 
-      - name: Switch to GREEN (update live alias BEFORE tests)
+      - name: Switch to GREEN (update live alias)
         id: switch
         env:
           AWS_REGION: ${{ vars.AWS_REGION || 'us-east-1' }}
@@ -571,8 +571,9 @@ jobs:
           GREEN_QUERY_VERSION: ${{ needs.deploy-aws-green.outputs.query_version }}
           GREEN_PROCESSOR_VERSION: ${{ needs.deploy-aws-green.outputs.processor_version }}
         run: |
-          echo "Switching live aliases to GREEN versions (BEFORE running tests)..."
-          echo "This ensures tests validate the actual code that will remain live."
+          echo "Switching live aliases to GREEN versions..."
+          echo "Note: AWS implementation switches traffic first, then validates."
+          echo "Rollback is automatic if validation fails (see rollback step)."
           echo ""
           
           # Update live alias to point to GREEN versions

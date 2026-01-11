@@ -26,11 +26,16 @@ async function parseBody(request: HttpRequest): Promise<unknown> {
   try {
     const body = await request.text();
     if (!body) {
-      throw new Error('Missing request body');
+      throw new Error('VALIDATION_ERROR: Missing request body');
     }
     return JSON.parse(body);
   } catch (error) {
-    throw new Error('Invalid JSON in request body');
+    // If it's already our validation error, re-throw it
+    if (error instanceof Error && error.message.startsWith('VALIDATION_ERROR:')) {
+      throw error;
+    }
+    // Otherwise it's a JSON parse error
+    throw new Error('VALIDATION_ERROR: Invalid JSON in request body');
   }
 }
 
@@ -136,7 +141,7 @@ export function createAzureFunctionIngestHandler(deps: AzureFunctionIngestDepend
       return createSuccessResponse(result);
     } catch (error) {
       // Handle validation errors with 400 status
-      if (error instanceof Error && error.message === 'VALIDATION_ERROR') {
+      if (error instanceof Error && (error.message === 'VALIDATION_ERROR' || error.message.startsWith('VALIDATION_ERROR:'))) {
         deps.logger.warn({ err: error, invocationId: requestId }, 'Validation error at ingress');
         return createErrorResponse(error, 400, requestId);
       }

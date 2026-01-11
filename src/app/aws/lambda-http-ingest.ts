@@ -24,13 +24,15 @@ const validateIngestRequest = createValidateIngestRequestEnvelope(limits);
 
 function parseBody(event: APIGatewayProxyEvent): unknown {
   if (!event.body) {
-    throw new Error('Missing request body');
+    const error = new Error('VALIDATION_ERROR: Missing request body');
+    throw error;
   }
 
   try {
     return JSON.parse(event.body);
   } catch (error) {
-    throw new Error('Invalid JSON in request body');
+    const validationError = new Error('VALIDATION_ERROR: Invalid JSON in request body');
+    throw validationError;
   }
 }
 
@@ -128,7 +130,7 @@ export function createLambdaIngestHandler(deps: LambdaIngestDependencies) {
       return createSuccessResponse(result);
     } catch (error) {
       // Handle validation errors with 400 status
-      if (error instanceof Error && error.message === 'VALIDATION_ERROR') {
+      if (error instanceof Error && (error.message === 'VALIDATION_ERROR' || error.message.startsWith('VALIDATION_ERROR:'))) {
         deps.logger.warn({ err: error, requestId }, 'Validation error at ingress');
         return createErrorResponse(error, 400, requestId);
       }

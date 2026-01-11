@@ -86,12 +86,13 @@ export class InMemoryOperationalStorage implements EventRepository {
     }
 
     // Filter by time range
+    // 'from' is inclusive (>=), 'to' is exclusive (<) per spec
     if (input.from) {
       results = results.filter((e) => e.occurredAt >= input.from);
     }
 
     if (input.to) {
-      results = results.filter((e) => e.occurredAt <= input.to!);
+      results = results.filter((e) => e.occurredAt < input.to!);
     }
 
     // Sort
