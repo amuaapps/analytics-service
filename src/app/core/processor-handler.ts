@@ -2,6 +2,7 @@ import type { Logger } from '../../utils/logger.js';
 import { createChildLogger } from '../../utils/index.js';
 import type { CoreProcessorRequest, CoreProcessorResponse } from './types.js';
 import type { StoredEvent } from '../../domain/stored-event-types.js';
+import type { IngestEvent } from '../../domain/ingest-types.js';
 import type { EventRepository, RawEventStore } from '../../infra/interfaces.js';
 import { createValidateIngestRequestEnvelope } from '../../domain/validation.js';
 import type { LimitsConfig } from '../../config/types.js';
@@ -14,7 +15,7 @@ export interface ProcessorHandlerDependencies {
 }
 
 function transformToStoredEvent(
-  event: any,
+  event: IngestEvent,
   metadata: { receivedAt: string; processedAt: string }
 ): StoredEvent {
   const base = {

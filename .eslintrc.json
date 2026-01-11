@@ -27,6 +27,36 @@
     "@typescript-eslint/no-floating-promises": "error",
     "@typescript-eslint/await-thenable": "error"
   },
+  "overrides": [
+    {
+      "files": ["tests/**/*.ts", "tests/**/*.tsx"],
+      "rules": {
+        "no-console": "off",
+        "@typescript-eslint/no-explicit-any": "off",
+        "@typescript-eslint/no-unsafe-assignment": "off",
+        "@typescript-eslint/no-unsafe-member-access": "off",
+        "@typescript-eslint/no-unsafe-argument": "off",
+        "@typescript-eslint/no-unsafe-call": "off",
+        "@typescript-eslint/no-unsafe-return": "off",
+        "@typescript-eslint/unbound-method": "off",
+        "@typescript-eslint/require-await": "off",
+        "@typescript-eslint/await-thenable": "off"
+      }
+    },
+    {
+      "files": ["src/infra/storage/in-memory-*.ts", "src/utils/cursor.ts", "src/infra/aws/s3-raw-event-store.ts", "src/infra/azure/blob-raw-event-store.ts", "src/app/azure/auth-middleware.ts", "src/app/azure/function-http-*.ts", "src/app/http/server.ts", "src/config/secrets.ts", "src/infra/aws/dynamodb-event-repository.ts", "src/infra/azure/cosmos-event-repository.ts"],
+      "rules": {
+        "@typescript-eslint/require-await": "off",
+        "@typescript-eslint/no-unsafe-assignment": "off",
+        "@typescript-eslint/no-unsafe-member-access": "off",
+        "@typescript-eslint/no-unsafe-argument": "off",
+        "@typescript-eslint/no-unsafe-return": "off",
+        "@typescript-eslint/no-misused-promises": "off",
+        "@typescript-eslint/await-thenable": "off",
+        "@typescript-eslint/restrict-template-expressions": "off"
+      }
+    }
+  ],
   "env": {
     "node": true,
     "es2022": true

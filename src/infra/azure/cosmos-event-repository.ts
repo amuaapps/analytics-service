@@ -34,15 +34,16 @@ export class CosmosEventRepository implements EventRepository {
   async storeEvents(events: StoredEvent[]): Promise<void> {
     try {
       // Use bulk operations for efficiency
-      const operations: OperationInput[] = events.map((event) => ({
+      // Azure Cosmos SDK has overly strict JSONValue types, so we use unknown cast
+      const operations = events.map((event) => ({
         operationType: 'Create' as const,
         resourceBody: {
           id: event.eventId,
           pk: event.source.appId, // Partition key field
           ttl: calculateCosmosDbTtl(event.occurredAt), // TTL in seconds (12 months from occurredAt)
           ...event,
-        } as any, // Azure Cosmos SDK has overly strict JSONValue types
-      }));
+        } as unknown,
+      })) as unknown as OperationInput[];
 
       const response = await this.container.items.bulk(operations);
 
@@ -119,7 +120,7 @@ export class CosmosEventRepository implements EventRepository {
       // Execute query with pagination
       const querySpec: SqlQuerySpec = {
         query,
-        parameters: parameters as any, // Azure Cosmos SDK has overly strict JSONValue types
+        parameters: parameters as unknown as SqlQuerySpec['parameters'], // Azure Cosmos SDK has overly strict JSONValue types
       };
 
       // Parse cursor if provided (Cosmos uses native continuation tokens, but we wrap them)
