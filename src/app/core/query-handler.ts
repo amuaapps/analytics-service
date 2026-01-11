@@ -3,6 +3,7 @@ import { createChildLogger } from '../../utils/index.js';
 import type { CoreQueryRequest, CoreQueryResponse } from './types.js';
 import type { EventRepository } from '../../infra/interfaces.js';
 import { isValidCursor } from '../../utils/cursor.js';
+import { mapStoredEventsToApiEvents } from '../../domain/event-mapper.js';
 
 export interface QueryHandlerDependencies {
   logger: Logger;
@@ -46,12 +47,15 @@ export async function handleQuery(
     // Query storage with opaque cursor (adapters handle decoding internally)
     const result = await storageAdapter.queryEvents(input);
 
+    // Map stored events to API events (strip internal DB fields)
+    const apiEvents = mapStoredEventsToApiEvents(result.events);
+
     // Cursor from storage adapter is already in canonical format
     const nextCursor = result.cursor;
 
     requestLogger.info(
       {
-        eventCount: result.events.length,
+        eventCount: apiEvents.length,
         hasMore: result.hasMore,
         hasNextCursor: !!nextCursor,
       },
@@ -59,7 +63,7 @@ export async function handleQuery(
     );
 
     return {
-      events: result.events,
+      events: apiEvents,
       cursor: nextCursor,
       hasMore: result.hasMore,
     };

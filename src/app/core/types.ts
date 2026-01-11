@@ -1,6 +1,6 @@
 import type { IngestRequestEnvelope } from '../../domain/ingest-types.js';
 import type { QueryEventsInput } from '../../domain/query-types.js';
-import type { StoredEvent } from '../../domain/stored-event-types.js';
+import type { ApiEvent } from '../../domain/api-event-types.js';
 
 export interface CoreIngestRequest {
   requestId: string;
@@ -19,7 +19,7 @@ export interface CoreQueryRequest {
 }
 
 export interface CoreQueryResponse {
-  events: StoredEvent[];
+  events: ApiEvent[];
   cursor?: string;
   hasMore: boolean;
 }

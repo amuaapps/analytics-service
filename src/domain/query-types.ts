@@ -1,5 +1,5 @@
 import type { EventType, SortOrder } from './base-types.js';
-import type { StoredEvent } from './stored-event-types.js';
+import type { ApiEvent } from './api-event-types.js';
 
 export interface QueryEventsInput {
   appId: string;
@@ -16,7 +16,7 @@ export interface QueryEventsInput {
 }
 
 export interface QueryEventsResponse {
-  items: StoredEvent[];
+  items: ApiEvent[];
   nextCursor?: string;
 }
 
