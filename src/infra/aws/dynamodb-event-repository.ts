@@ -69,39 +69,48 @@ export class DynamoDBEventRepository implements EventRepository {
     try {
       const { appId, from, to, userId, sessionId, limit = 50, cursor } = input;
 
-      // Determine which index to use
+      // Determine which index to use and the appropriate sort key attribute
       let indexName: string | undefined;
+      let sortKeyAttribute: string;
       let keyConditionExpression: string;
       let expressionAttributeValues: Record<string, unknown>;
 
       if (userId) {
         // Query by user (scoped to appId for multi-tenant safety)
         indexName = 'GSI1';
+        sortKeyAttribute = 'GSI1SK';
         const compositeKey = `${appId}#${userId}`;
         keyConditionExpression = 'GSI1PK = :compositeKey';
         expressionAttributeValues = { ':compositeKey': compositeKey };
       } else if (sessionId) {
         // Query by session (scoped to appId for multi-tenant safety)
         indexName = 'GSI2';
+        sortKeyAttribute = 'GSI2SK';
         const compositeKey = `${appId}#${sessionId}`;
         keyConditionExpression = 'GSI2PK = :compositeKey';
         expressionAttributeValues = { ':compositeKey': compositeKey };
       } else {
         // Query by appId (primary index)
+        sortKeyAttribute = 'SK';
         keyConditionExpression = 'PK = :appId';
         expressionAttributeValues = { ':appId': appId };
       }
 
       // Add time range to sort key condition
+      // Note: 'to' is exclusive, so we use < instead of <=
       if (from && to) {
-        keyConditionExpression += ' AND SK BETWEEN :from AND :to';
+        // Use BETWEEN for both bounds (DynamoDB BETWEEN is inclusive on both ends)
+        // To make 'to' exclusive, we need to subtract 1ms from the timestamp
+        const exclusiveTo = new Date(new Date(to).getTime() - 1).toISOString();
+        keyConditionExpression += ` AND ${sortKeyAttribute} BETWEEN :from AND :to`;
         expressionAttributeValues[':from'] = from;
-        expressionAttributeValues[':to'] = to;
+        expressionAttributeValues[':to'] = exclusiveTo;
       } else if (from) {
-        keyConditionExpression += ' AND SK >= :from';
+        keyConditionExpression += ` AND ${sortKeyAttribute} >= :from`;
         expressionAttributeValues[':from'] = from;
       } else if (to) {
-        keyConditionExpression += ' AND SK <= :to';
+        // 'to' is exclusive, so use < instead of <=
+        keyConditionExpression += ` AND ${sortKeyAttribute} < :to`;
         expressionAttributeValues[':to'] = to;
       }
 
@@ -110,17 +119,27 @@ export class DynamoDBEventRepository implements EventRepository {
       if (cursor) {
         try {
           const cursorData = decodeCursor(cursor);
-          // Reconstruct DynamoDB key structure from cursor data
+          
+          // Cursor stores table PK (appId) and SK (occurredAt#eventId)
+          // For backward compatibility, detect old format with composite keys
+          let tablePK = cursorData.pk;
+          if (tablePK.includes('#')) {
+            // Old format: extract appId from composite key
+            tablePK = tablePK.split('#')[0];
+          }
+          
+          // Build ExclusiveStartKey with all required keys
           exclusiveStartKey = {
-            PK: cursorData.pk,
+            PK: tablePK,
             SK: cursorData.sk,
           };
+          
           // Add GSI keys if querying by index
-          if (indexName === 'GSI1') {
-            exclusiveStartKey.GSI1PK = cursorData.pk;
+          if (indexName === 'GSI1' && userId) {
+            exclusiveStartKey.GSI1PK = `${tablePK}#${userId}`;
             exclusiveStartKey.GSI1SK = cursorData.sk;
-          } else if (indexName === 'GSI2') {
-            exclusiveStartKey.GSI2PK = cursorData.pk;
+          } else if (indexName === 'GSI2' && sessionId) {
+            exclusiveStartKey.GSI2PK = `${tablePK}#${sessionId}`;
             exclusiveStartKey.GSI2SK = cursorData.sk;
           }
         } catch (error) {
@@ -149,15 +168,8 @@ export class DynamoDBEventRepository implements EventRepository {
       let nextCursor: string | undefined;
       if (hasMore && events.length > 0) {
         const lastEvent = events[events.length - 1];
-        // Cursor pk uses composite key for GSI queries to maintain multi-tenant safety
-        let pk: string;
-        if (userId) {
-          pk = `${appId}#${userId}`;
-        } else if (sessionId) {
-          pk = `${appId}#${sessionId}`;
-        } else {
-          pk = appId;
-        }
+        // Cursor always uses table PK (appId) - composite keys are derived from request params
+        const pk = appId;
         const sk = `${lastEvent.occurredAt}#${lastEvent.eventId}`;
         nextCursor = encodeCursor(pk, sk);
       }
