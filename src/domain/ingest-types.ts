@@ -31,7 +31,7 @@ export interface PageEvent extends BaseIngestEvent {
 
 export interface IdentifyEvent extends BaseIngestEvent {
   type: 'identify';
-  traits: Record<string, unknown>;
+  traits?: Record<string, unknown>;
 }
 
 export type IngestEvent = TrackEvent | PageEvent | IdentifyEvent;

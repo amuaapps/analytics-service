@@ -11,8 +11,8 @@ jest.mock('@aws-sdk/util-dynamodb');
 
 describe('DynamoDBEventRepository - Query Logic', () => {
   let repository: DynamoDBEventRepository;
-  let mockClient: jest.Mocked<DynamoDBClient>;
-  let mockLogger: jest.Mocked<Logger>;
+  let mockClient: any;
+  let mockLogger: any;
 
   beforeEach(() => {
     jest.clearAllMocks();
@@ -73,7 +73,7 @@ describe('DynamoDBEventRepository - Query Logic', () => {
 
       await repository.queryEvents(input);
 
-      const call = (mockClient.send as jest.Mock).mock.calls[0][0];
+      const call = mockClient.send.mock.calls[0][0];
       expect(call.input.KeyConditionExpression).toBe('PK = :appId AND SK BETWEEN :from AND :to');
       expect(call.input.IndexName).toBeUndefined();
     });
@@ -89,7 +89,7 @@ describe('DynamoDBEventRepository - Query Logic', () => {
 
       await repository.queryEvents(input);
 
-      const call = (mockClient.send as jest.Mock).mock.calls[0][0];
+      const call = mockClient.send.mock.calls[0][0];
       const marshalledValues = call.input.ExpressionAttributeValues;
 
       // Key-bound strategy: append '#' to timestamps
@@ -110,7 +110,7 @@ describe('DynamoDBEventRepository - Query Logic', () => {
 
       await repository.queryEvents(input);
 
-      const call = (mockClient.send as jest.Mock).mock.calls[0][0];
+      const call = mockClient.send.mock.calls[0][0];
       expect(call.input.KeyConditionExpression).toContain('< :to');
     });
   });
@@ -127,7 +127,7 @@ describe('DynamoDBEventRepository - Query Logic', () => {
 
       await repository.queryEvents(input);
 
-      const call = (mockClient.send as jest.Mock).mock.calls[0][0];
+      const call = mockClient.send.mock.calls[0][0];
       expect(call.input.IndexName).toBe('GSI1');
       expect(call.input.KeyConditionExpression).toBe('GSI1PK = :compositeKey AND GSI1SK >= :from');
     });
@@ -143,7 +143,7 @@ describe('DynamoDBEventRepository - Query Logic', () => {
 
       await repository.queryEvents(input);
 
-      const call = (mockClient.send as jest.Mock).mock.calls[0][0];
+      const call = mockClient.send.mock.calls[0][0];
       const marshalledValues = call.input.ExpressionAttributeValues;
       expect(marshalledValues[':compositeKey']).toBe('test-app#user-123');
     });
@@ -160,7 +160,7 @@ describe('DynamoDBEventRepository - Query Logic', () => {
 
       await repository.queryEvents(input);
 
-      const call = (mockClient.send as jest.Mock).mock.calls[0][0];
+      const call = mockClient.send.mock.calls[0][0];
       expect(call.input.IndexName).toBe('GSI1');
       expect(call.input.KeyConditionExpression).toBe(
         'GSI1PK = :compositeKey AND GSI1SK BETWEEN :from AND :to'
@@ -180,7 +180,7 @@ describe('DynamoDBEventRepository - Query Logic', () => {
 
       await repository.queryEvents(input);
 
-      const call = (mockClient.send as jest.Mock).mock.calls[0][0];
+      const call = mockClient.send.mock.calls[0][0];
       expect(call.input.IndexName).toBe('GSI2');
       expect(call.input.KeyConditionExpression).toBe('GSI2PK = :compositeKey AND GSI2SK >= :from');
     });
@@ -196,7 +196,7 @@ describe('DynamoDBEventRepository - Query Logic', () => {
 
       await repository.queryEvents(input);
 
-      const call = (mockClient.send as jest.Mock).mock.calls[0][0];
+      const call = mockClient.send.mock.calls[0][0];
       const marshalledValues = call.input.ExpressionAttributeValues;
       expect(marshalledValues[':compositeKey']).toBe('test-app#session-456');
     });
@@ -213,7 +213,7 @@ describe('DynamoDBEventRepository - Query Logic', () => {
 
       await repository.queryEvents(input);
 
-      const call = (mockClient.send as jest.Mock).mock.calls[0][0];
+      const call = mockClient.send.mock.calls[0][0];
       expect(call.input.IndexName).toBe('GSI2');
       expect(call.input.KeyConditionExpression).toBe(
         'GSI2PK = :compositeKey AND GSI2SK BETWEEN :from AND :to'
@@ -233,7 +233,7 @@ describe('DynamoDBEventRepository - Query Logic', () => {
 
       await repository.queryEvents(input);
 
-      const call = (mockClient.send as jest.Mock).mock.calls[0][0];
+      const call = mockClient.send.mock.calls[0][0];
       expect(call.input.Limit).toBe(11); // limit + 1
     });
 
@@ -340,7 +340,7 @@ describe('DynamoDBEventRepository - Query Logic', () => {
 
       await repository.queryEvents(input);
 
-      const call = (mockClient.send as jest.Mock).mock.calls[0][0];
+      const call = mockClient.send.mock.calls[0][0];
       const exclusiveStartKey = call.input.ExclusiveStartKey;
 
       expect(exclusiveStartKey).toBeDefined();
@@ -369,7 +369,7 @@ describe('DynamoDBEventRepository - Query Logic', () => {
 
       await repository.queryEvents(input);
 
-      const call = (mockClient.send as jest.Mock).mock.calls[0][0];
+      const call = mockClient.send.mock.calls[0][0];
       const exclusiveStartKey = call.input.ExclusiveStartKey;
 
       expect(exclusiveStartKey).toBeDefined();
@@ -427,7 +427,7 @@ describe('DynamoDBEventRepository - Query Logic', () => {
       expect(secondResult.events).toHaveLength(5);
 
       // Verify second query used ExclusiveStartKey
-      const secondCall = (mockClient.send as jest.Mock).mock.calls[1][0];
+      const secondCall = mockClient.send.mock.calls[1][0];
       expect(secondCall.input.ExclusiveStartKey).toBeDefined();
       expect(secondCall.input.ExclusiveStartKey.PK).toBe('test-app');
       expect(secondCall.input.ExclusiveStartKey.GSI1PK).toBe('test-app#user-123');
@@ -478,7 +478,7 @@ describe('DynamoDBEventRepository - Query Logic', () => {
       expect(secondResult.events).toHaveLength(3);
 
       // Verify ExclusiveStartKey for GSI2
-      const secondCall = (mockClient.send as jest.Mock).mock.calls[1][0];
+      const secondCall = mockClient.send.mock.calls[1][0];
       expect(secondCall.input.ExclusiveStartKey).toBeDefined();
       expect(secondCall.input.ExclusiveStartKey.PK).toBe('test-app');
       expect(secondCall.input.ExclusiveStartKey.GSI2PK).toBe('test-app#session-456');
@@ -497,7 +497,7 @@ describe('DynamoDBEventRepository - Query Logic', () => {
 
       await repository.queryEvents(input);
 
-      const call = (mockClient.send as jest.Mock).mock.calls[0][0];
+      const call = mockClient.send.mock.calls[0][0];
       expect(call.input.ScanIndexForward).toBe(false);
     });
 
@@ -512,7 +512,7 @@ describe('DynamoDBEventRepository - Query Logic', () => {
 
       await repository.queryEvents(input);
 
-      const call = (mockClient.send as jest.Mock).mock.calls[0][0];
+      const call = mockClient.send.mock.calls[0][0];
       expect(call.input.ScanIndexForward).toBe(true);
     });
   });
@@ -528,7 +528,7 @@ describe('DynamoDBEventRepository - Query Logic', () => {
 
       await repository.queryEvents(input);
 
-      const call = (mockClient.send as jest.Mock).mock.calls[0][0];
+      const call = mockClient.send.mock.calls[0][0];
       expect(call.input.KeyConditionExpression).toBe('PK = :appId AND SK >= :from');
       expect(call.input.ExpressionAttributeValues[':from']).toBe('2026-01-01T00:00:00.000Z#');
     });
@@ -544,7 +544,7 @@ describe('DynamoDBEventRepository - Query Logic', () => {
 
       await repository.queryEvents(input);
 
-      const call = (mockClient.send as jest.Mock).mock.calls[0][0];
+      const call = mockClient.send.mock.calls[0][0];
       expect(call.input.KeyConditionExpression).toContain('BETWEEN');
       expect(call.input.ExpressionAttributeValues[':to']).toBe('2026-01-02T00:00:00.000Z#');
     });
@@ -559,7 +559,7 @@ describe('DynamoDBEventRepository - Query Logic', () => {
 
       await repository.queryEvents(input);
 
-      const call = (mockClient.send as jest.Mock).mock.calls[0][0];
+      const call = mockClient.send.mock.calls[0][0];
       const toBound = call.input.ExpressionAttributeValues[':to'];
 
       // Upper bound 'to#' excludes all events at to
@@ -579,7 +579,7 @@ describe('DynamoDBEventRepository - Query Logic', () => {
 
       await repository.queryEvents(input);
 
-      const call = (mockClient.send as jest.Mock).mock.calls[0][0];
+      const call = mockClient.send.mock.calls[0][0];
       const toBound = call.input.ExpressionAttributeValues[':to'];
 
       // Events before 'to' are included
@@ -601,7 +601,7 @@ describe('DynamoDBEventRepository - Query Logic', () => {
 
       await repository.queryEvents(inputFrom);
 
-      const callFrom = (mockClient.send as jest.Mock).mock.calls[0][0];
+      const callFrom = mockClient.send.mock.calls[0][0];
       expect(callFrom.input.ExpressionAttributeValues[':from']).toBe('2026-01-01T00:00:00.000Z#');
       expect(callFrom.input.KeyConditionExpression).toContain('>= :from');
     });
@@ -619,7 +619,7 @@ describe('DynamoDBEventRepository - Query Logic', () => {
 
       await repository.queryEvents(input);
 
-      const call = (mockClient.send as jest.Mock).mock.calls[0][0];
+      const call = mockClient.send.mock.calls[0][0];
       expect(call.input.FilterExpression).toBe('#type IN (:type0)');
       expect(call.input.ExpressionAttributeNames).toEqual({ '#type': 'type' });
       expect(call.input.ExpressionAttributeValues[':type0']).toBe('track');
@@ -636,7 +636,7 @@ describe('DynamoDBEventRepository - Query Logic', () => {
 
       await repository.queryEvents(input);
 
-      const call = (mockClient.send as jest.Mock).mock.calls[0][0];
+      const call = mockClient.send.mock.calls[0][0];
       expect(call.input.FilterExpression).toBe('#type IN (:type0, :type1, :type2)');
       expect(call.input.ExpressionAttributeNames).toEqual({ '#type': 'type' });
       expect(call.input.ExpressionAttributeValues[':type0']).toBe('track');
@@ -655,7 +655,7 @@ describe('DynamoDBEventRepository - Query Logic', () => {
 
       await repository.queryEvents(input);
 
-      const call = (mockClient.send as jest.Mock).mock.calls[0][0];
+      const call = mockClient.send.mock.calls[0][0];
       expect(call.input.FilterExpression).toBeUndefined();
       expect(call.input.ExpressionAttributeNames).toBeUndefined();
     });
@@ -671,7 +671,7 @@ describe('DynamoDBEventRepository - Query Logic', () => {
 
       await repository.queryEvents(input);
 
-      const call = (mockClient.send as jest.Mock).mock.calls[0][0];
+      const call = mockClient.send.mock.calls[0][0];
       // Verify we use #type placeholder, not raw 'type'
       expect(call.input.FilterExpression).toContain('#type');
       expect(call.input.FilterExpression).not.toContain('type IN');
@@ -691,7 +691,7 @@ describe('DynamoDBEventRepository - Query Logic', () => {
 
       await repository.queryEvents(input);
 
-      const call = (mockClient.send as jest.Mock).mock.calls[0][0];
+      const call = mockClient.send.mock.calls[0][0];
       expect(call.input.FilterExpression).toBe('#name IN (:name0)');
       expect(call.input.ExpressionAttributeNames).toEqual({ '#name': 'name' });
       expect(call.input.ExpressionAttributeValues[':name0']).toBe('Button Clicked');
@@ -708,7 +708,7 @@ describe('DynamoDBEventRepository - Query Logic', () => {
 
       await repository.queryEvents(input);
 
-      const call = (mockClient.send as jest.Mock).mock.calls[0][0];
+      const call = mockClient.send.mock.calls[0][0];
       expect(call.input.FilterExpression).toBe('#name IN (:name0, :name1, :name2)');
       expect(call.input.ExpressionAttributeNames).toEqual({ '#name': 'name' });
       expect(call.input.ExpressionAttributeValues[':name0']).toBe('Button Clicked');
@@ -727,7 +727,7 @@ describe('DynamoDBEventRepository - Query Logic', () => {
 
       await repository.queryEvents(input);
 
-      const call = (mockClient.send as jest.Mock).mock.calls[0][0];
+      const call = mockClient.send.mock.calls[0][0];
       expect(call.input.FilterExpression).toBeUndefined();
       expect(call.input.ExpressionAttributeNames).toBeUndefined();
     });
@@ -743,7 +743,7 @@ describe('DynamoDBEventRepository - Query Logic', () => {
 
       await repository.queryEvents(input);
 
-      const call = (mockClient.send as jest.Mock).mock.calls[0][0];
+      const call = mockClient.send.mock.calls[0][0];
       // Verify we use #name placeholder, not raw 'name'
       expect(call.input.FilterExpression).toContain('#name');
       expect(call.input.FilterExpression).not.toContain('name IN');
@@ -764,7 +764,7 @@ describe('DynamoDBEventRepository - Query Logic', () => {
 
       await repository.queryEvents(input);
 
-      const call = (mockClient.send as jest.Mock).mock.calls[0][0];
+      const call = mockClient.send.mock.calls[0][0];
       expect(call.input.FilterExpression).toBe(
         '#type IN (:type0, :type1) AND #name IN (:name0, :name1)'
       );
@@ -791,7 +791,7 @@ describe('DynamoDBEventRepository - Query Logic', () => {
 
       await repository.queryEvents(input);
 
-      const call = (mockClient.send as jest.Mock).mock.calls[0][0];
+      const call = mockClient.send.mock.calls[0][0];
       expect(call.input.FilterExpression).toBe(
         'actor.anonymousId = :anonymousId AND #type IN (:type0) AND #name IN (:name0)'
       );
@@ -816,7 +816,7 @@ describe('DynamoDBEventRepository - Query Logic', () => {
 
       await repository.queryEvents(input);
 
-      const call = (mockClient.send as jest.Mock).mock.calls[0][0];
+      const call = mockClient.send.mock.calls[0][0];
       expect(call.input.IndexName).toBe('GSI1');
       expect(call.input.KeyConditionExpression).toBe('GSI1PK = :compositeKey AND GSI1SK >= :from');
       expect(call.input.FilterExpression).toBe('#type IN (:type0, :type1)');
@@ -835,7 +835,7 @@ describe('DynamoDBEventRepository - Query Logic', () => {
 
       await repository.queryEvents(input);
 
-      const call = (mockClient.send as jest.Mock).mock.calls[0][0];
+      const call = mockClient.send.mock.calls[0][0];
       expect(call.input.IndexName).toBe('GSI2');
       expect(call.input.KeyConditionExpression).toBe('GSI2PK = :compositeKey AND GSI2SK >= :from');
       expect(call.input.FilterExpression).toBe('#name IN (:name0)');
@@ -857,7 +857,7 @@ describe('DynamoDBEventRepository - Query Logic', () => {
 
       await repository.queryEvents(input);
 
-      const call = (mockClient.send as jest.Mock).mock.calls[0][0];
+      const call = mockClient.send.mock.calls[0][0];
       expect(call.input.IndexName).toBe('GSI1');
       expect(call.input.KeyConditionExpression).toContain('GSI1PK = :compositeKey');
       expect(call.input.FilterExpression).toBe(

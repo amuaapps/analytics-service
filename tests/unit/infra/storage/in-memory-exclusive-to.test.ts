@@ -1,11 +1,13 @@
 import { InMemoryOperationalStorage } from '../../../../src/infra/storage/in-memory-operational-storage.js';
 import type { StoredEvent } from '../../../../src/domain/stored-event-types.js';
+import { createLogger } from '../../../../src/utils/logger.js';
 
 describe('InMemoryOperationalStorage - Exclusive "to" parameter', () => {
   let storage: InMemoryOperationalStorage;
 
   beforeEach(() => {
-    storage = new InMemoryOperationalStorage();
+    const logger = createLogger({ serviceName: 'test', level: 'error', env: 'test' });
+    storage = new InMemoryOperationalStorage(logger);
   });
 
   it('should exclude events where occurredAt === to (exclusive upper bound)', async () => {
@@ -60,7 +62,7 @@ describe('InMemoryOperationalStorage - Exclusive "to" parameter', () => {
     // event-3 (after 'to') should be EXCLUDED
     expect(result.events).toHaveLength(1);
     expect(result.events[0].eventId).toBe('event-1');
-    expect(result.events[0].name).toBe('before');
+    expect((result.events[0] as any).name).toBe('before');
   });
 
   it('should include events where occurredAt === from (inclusive lower bound)', async () => {

@@ -1,5 +1,8 @@
 import { describe, it, expect } from '@jest/globals';
-import { mapStoredEventToApiEvent, mapStoredEventsToApiEvents } from '../../../src/domain/event-mapper.js';
+import {
+  mapStoredEventToApiEvent,
+  mapStoredEventsToApiEvents,
+} from '../../../src/domain/event-mapper.js';
 import type { StoredEvent } from '../../../src/domain/stored-event-types.js';
 
 describe('Event Mapper', () => {
@@ -13,7 +16,7 @@ describe('Event Mapper', () => {
         occurredAt: '2026-01-11T00:00:00.000Z',
         receivedAt: '2026-01-11T00:00:01.000Z',
         processedAt: '2026-01-11T00:00:02.000Z',
-        source: { appId: 'test-app', platform: 'web', env: 'production' },
+        source: { appId: 'test-app', platform: 'web', env: 'prod' },
         actor: { userId: 'user-123', anonymousId: 'anon-456' },
         properties: { buttonId: 'submit' },
         // DynamoDB internal fields
@@ -32,12 +35,12 @@ describe('Event Mapper', () => {
       expect(apiEvent.schemaVersion).toBe('1.0.0');
       expect(apiEvent.eventId).toBe('event-123');
       expect(apiEvent.type).toBe('track');
-      expect(apiEvent.name).toBe('Button Clicked');
+      expect((apiEvent as any).name).toBe('Button Clicked');
       expect(apiEvent.occurredAt).toBe('2026-01-11T00:00:00.000Z');
       expect(apiEvent.receivedAt).toBe('2026-01-11T00:00:01.000Z');
-      expect(apiEvent.source).toEqual({ appId: 'test-app', platform: 'web', env: 'production' });
+      expect(apiEvent.source).toEqual({ appId: 'test-app', platform: 'web', env: 'prod' });
       expect(apiEvent.actor).toEqual({ userId: 'user-123', anonymousId: 'anon-456' });
-      expect(apiEvent.properties).toEqual({ buttonId: 'submit' });
+      expect((apiEvent as any).properties).toEqual({ buttonId: 'submit' });
 
       // Should NOT include internal fields
       expect(apiEvent).not.toHaveProperty('processedAt');
@@ -59,7 +62,7 @@ describe('Event Mapper', () => {
         occurredAt: '2026-01-11T00:00:00.000Z',
         receivedAt: '2026-01-11T00:00:01.000Z',
         processedAt: '2026-01-11T00:00:02.000Z',
-        source: { appId: 'test-app', platform: 'web', env: 'production' },
+        source: { appId: 'test-app', platform: 'web', env: 'prod' },
         actor: { anonymousId: 'anon-789' },
         properties: { path: '/products', title: 'Products Page' },
         // Cosmos DB internal fields
@@ -79,8 +82,8 @@ describe('Event Mapper', () => {
       expect(apiEvent.schemaVersion).toBe('1.0.0');
       expect(apiEvent.eventId).toBe('event-456');
       expect(apiEvent.type).toBe('page');
-      expect(apiEvent.name).toBe('/products');
-      expect(apiEvent.properties).toEqual({ path: '/products', title: 'Products Page' });
+      expect((apiEvent as any).name).toBe('/products');
+      expect((apiEvent as any).properties).toEqual({ path: '/products', title: 'Products Page' });
 
       // Should NOT include Cosmos DB fields
       expect(apiEvent).not.toHaveProperty('processedAt');
@@ -102,7 +105,7 @@ describe('Event Mapper', () => {
         occurredAt: '2026-01-11T00:00:00.000Z',
         receivedAt: '2026-01-11T00:00:01.000Z',
         processedAt: '2026-01-11T00:00:02.000Z',
-        source: { appId: 'test-app', platform: 'mobile', env: 'production' },
+        source: { appId: 'test-app', platform: 'ios', env: 'prod' },
         actor: { userId: 'user-456' },
         traits: { email: 'user@example.com', plan: 'premium' },
         // Mixed internal fields
@@ -116,7 +119,7 @@ describe('Event Mapper', () => {
 
       // Should include canonical fields
       expect(apiEvent.type).toBe('identify');
-      expect(apiEvent.traits).toEqual({ email: 'user@example.com', plan: 'premium' });
+      expect((apiEvent as any).traits).toEqual({ email: 'user@example.com', plan: 'premium' });
 
       // Should NOT include any internal fields
       expect(apiEvent).not.toHaveProperty('processedAt');
@@ -135,7 +138,7 @@ describe('Event Mapper', () => {
         occurredAt: '2026-01-11T00:00:00.000Z',
         receivedAt: '2026-01-11T00:00:01.000Z',
         processedAt: '2026-01-11T00:00:02.000Z',
-        source: { appId: 'test-app', platform: 'web', env: 'production' },
+        source: { appId: 'test-app', platform: 'web', env: 'prod' },
         actor: { userId: 'user-123' },
         context: {
           sessionId: 'session-123',
@@ -170,7 +173,7 @@ describe('Event Mapper', () => {
         occurredAt: '2026-01-11T00:00:00.000Z',
         receivedAt: '2026-01-11T00:00:01.000Z',
         processedAt: '2026-01-11T00:00:02.000Z',
-        source: { appId: 'test-app', platform: 'web', env: 'production' },
+        source: { appId: 'test-app', platform: 'web', env: 'prod' },
         actor: { userId: 'user-123' },
         PK: 'test-app',
       } as StoredEvent & Record<string, unknown>;
@@ -190,7 +193,7 @@ describe('Event Mapper', () => {
         occurredAt: '2026-01-11T00:00:00.000Z',
         receivedAt: '2026-01-11T00:00:01.000Z',
         processedAt: '2026-01-11T00:00:02.000Z',
-        source: { appId: 'test-app', platform: 'web', env: 'production' },
+        source: { appId: 'test-app', platform: 'web', env: 'prod' },
         actor: { userId: 'user-123' },
         PK: 'test-app',
       } as StoredEvent & Record<string, unknown>;
@@ -213,7 +216,7 @@ describe('Event Mapper', () => {
           occurredAt: '2026-01-11T00:00:00.000Z',
           receivedAt: '2026-01-11T00:00:01.000Z',
           processedAt: '2026-01-11T00:00:02.000Z',
-          source: { appId: 'test-app', platform: 'web', env: 'production' },
+          source: { appId: 'test-app', platform: 'web', env: 'prod' },
           actor: { userId: 'user-1' },
           PK: 'test-app',
           SK: '2026-01-11T00:00:00.000Z#event-1',
@@ -226,7 +229,7 @@ describe('Event Mapper', () => {
           occurredAt: '2026-01-11T00:00:10.000Z',
           receivedAt: '2026-01-11T00:00:11.000Z',
           processedAt: '2026-01-11T00:00:12.000Z',
-          source: { appId: 'test-app', platform: 'web', env: 'production' },
+          source: { appId: 'test-app', platform: 'web', env: 'prod' },
           actor: { userId: 'user-2' },
           id: 'cosmos-id-2',
           pk: 'test-app',
@@ -236,7 +239,7 @@ describe('Event Mapper', () => {
       const apiEvents = mapStoredEventsToApiEvents(storedEvents);
 
       expect(apiEvents).toHaveLength(2);
-      
+
       // First event
       expect(apiEvents[0].eventId).toBe('event-1');
       expect(apiEvents[0].type).toBe('track');

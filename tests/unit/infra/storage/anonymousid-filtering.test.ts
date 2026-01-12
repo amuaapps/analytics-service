@@ -1,11 +1,13 @@
 import { InMemoryOperationalStorage } from '../../../../src/infra/storage/in-memory-operational-storage.js';
 import type { StoredEvent } from '../../../../src/domain/stored-event-types.js';
+import { createLogger } from '../../../../src/utils/logger.js';
 
 describe('AnonymousId Filtering - In-Memory Storage', () => {
   let storage: InMemoryOperationalStorage;
 
   beforeEach(() => {
-    storage = new InMemoryOperationalStorage();
+    const logger = createLogger({ serviceName: 'test', level: 'error', env: 'test' });
+    storage = new InMemoryOperationalStorage(logger);
   });
 
   it('should filter events by anonymousId', async () => {

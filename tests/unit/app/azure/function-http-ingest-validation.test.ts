@@ -1,5 +1,5 @@
 import type { HttpRequest, InvocationContext } from '@azure/functions';
-import { createAzureFunctionIngestHandler } from '../../../../src/app/azure/function-http-ingest.ts';
+import { createAzureFunctionIngestHandler } from '../../../../src/app/azure/function-http-ingest.js';
 import type { Logger } from '../../../../src/utils/logger.js';
 import type { QueuePublisher, RawEventStore } from '../../../../src/infra/interfaces.js';
 import { loadLimitsConfig } from '../../../../src/config/limits.js';
@@ -55,8 +55,8 @@ describe('Azure Function HTTP Ingest - Invalid JSON Handling', () => {
     const response = await handler(request, context);
 
     expect(response.status).toBe(400);
-    expect(response.headers?.['Content-Type']).toBe('application/json');
-    
+    expect((response.headers as any)['Content-Type']).toBe('application/json');
+
     const body = JSON.parse(response.body as string);
     expect(body.error.code).toBe('VALIDATION_ERROR');
     expect(body.error.message).toContain('Missing request body');
@@ -78,8 +78,8 @@ describe('Azure Function HTTP Ingest - Invalid JSON Handling', () => {
     const response = await handler(request, context);
 
     expect(response.status).toBe(400);
-    expect(response.headers?.['Content-Type']).toBe('application/json');
-    
+    expect((response.headers as any)['Content-Type']).toBe('application/json');
+
     const body = JSON.parse(response.body as string);
     expect(body.error.code).toBe('VALIDATION_ERROR');
     expect(body.error.message).toContain('Invalid JSON');
@@ -101,8 +101,8 @@ describe('Azure Function HTTP Ingest - Invalid JSON Handling', () => {
     const response = await handler(request, context);
 
     expect(response.status).toBe(400);
-    expect(response.headers?.['Content-Type']).toBe('application/json');
-    
+    expect((response.headers as any)['Content-Type']).toBe('application/json');
+
     const body = JSON.parse(response.body as string);
     expect(body.error.code).toBe('VALIDATION_ERROR');
     expect(body.error.message).toContain('Invalid JSON');
@@ -124,8 +124,8 @@ describe('Azure Function HTTP Ingest - Invalid JSON Handling', () => {
     const response = await handler(request, context);
 
     expect(response.status).toBe(400);
-    expect(response.headers?.['Content-Type']).toBe('application/json');
-    
+    expect((response.headers as any)['Content-Type']).toBe('application/json');
+
     const body = JSON.parse(response.body as string);
     expect(body.error.code).toBe('VALIDATION_ERROR');
     expect(body.requestId).toBe('test-invocation-id-4');

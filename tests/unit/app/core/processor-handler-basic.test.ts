@@ -2,14 +2,13 @@ import { describe, it, expect, jest, beforeEach } from '@jest/globals';
 import { handleProcessor } from '../../../../src/app/core/processor-handler.js';
 import type { CoreProcessorRequest } from '../../../../src/app/core/types.js';
 import type { StoredEvent } from '../../../../src/domain/stored-event-types.js';
-import type { EventRepository, RawEventStore } from '../../../../src/infra/interfaces.js';
 import { createLogger } from '../../../../src/utils/logger.js';
 import { loadLimitsConfig } from '../../../../src/config/limits.js';
 import { SCHEMA_VERSION } from '../../../../src/domain/base-types.js';
 
 describe('Processor Handler - Basic Functionality', () => {
-  let mockOperationalStorage: jest.Mocked<EventRepository>;
-  let mockRawStorage: jest.Mocked<RawEventStore>;
+  let mockOperationalStorage: any;
+  let mockRawStorage: any;
   let mockLogger: any;
   let limits: ReturnType<typeof loadLimitsConfig>;
 
@@ -17,24 +16,30 @@ describe('Processor Handler - Basic Functionality', () => {
     limits = loadLimitsConfig();
 
     mockOperationalStorage = {
-      storeEvents: jest.fn<EventRepository['storeEvents']>().mockResolvedValue(undefined),
-      queryEvents: jest.fn<EventRepository['queryEvents']>().mockResolvedValue({
-        events: [],
-        hasMore: false,
-        cursor: undefined,
-      }),
-      checkEventExists: jest.fn<EventRepository['checkEventExists']>().mockResolvedValue(false),
-    } as jest.Mocked<EventRepository>;
+      storeEvents: jest.fn(() => Promise.resolve()),
+      queryEvents: jest.fn(() =>
+        Promise.resolve({
+          events: [],
+          hasMore: false,
+          cursor: undefined,
+        })
+      ),
+      checkEventExists: jest.fn(() => Promise.resolve(false)),
+    };
 
     mockRawStorage = {
-      storeRawBatch: jest.fn<RawEventStore['storeRawBatch']>().mockResolvedValue({ batchId: 'test-batch', storageLocation: 'test-location' }),
-      getRawBatch: jest.fn<RawEventStore['getRawBatch']>().mockResolvedValue({
-        batchId: 'test-batch',
-        requestId: 'test-request',
-        receivedAt: '2026-01-08T06:00:00Z',
-        events: [],
-      }),
-    } as jest.Mocked<RawEventStore>;
+      storeRawBatch: jest.fn(() =>
+        Promise.resolve({ batchId: 'test-batch', storageLocation: 'test-location' })
+      ),
+      getRawBatch: jest.fn(() =>
+        Promise.resolve({
+          batchId: 'test-batch',
+          requestId: 'test-request',
+          receivedAt: '2026-01-08T06:00:00Z',
+          events: [],
+        })
+      ),
+    };
 
     const logger = createLogger({
       serviceName: 'test-service',
@@ -58,7 +63,7 @@ describe('Processor Handler - Basic Functionality', () => {
       },
     ];
 
-    (mockRawStorage.getRawBatch as jest.Mock).mockResolvedValueOnce({
+    mockRawStorage.getRawBatch.mockResolvedValueOnce({
       batchId: 'batch-456',
       requestId: 'req-123',
       receivedAt: '2026-01-08T06:00:00Z',
@@ -118,7 +123,7 @@ describe('Processor Handler - Basic Functionality', () => {
       },
     ];
 
-    (mockRawStorage.getRawBatch as jest.Mock).mockResolvedValueOnce({
+    mockRawStorage.getRawBatch.mockResolvedValueOnce({
       batchId: 'batch-456',
       requestId: 'req-123',
       receivedAt: '2026-01-08T06:00:00Z',
@@ -169,7 +174,7 @@ describe('Processor Handler - Basic Functionality', () => {
       },
     ];
 
-    (mockRawStorage.getRawBatch as jest.Mock).mockResolvedValueOnce({
+    mockRawStorage.getRawBatch.mockResolvedValueOnce({
       batchId: 'batch-456',
       requestId: 'req-123',
       receivedAt: '2026-01-08T06:00:00Z',
@@ -198,7 +203,7 @@ describe('Processor Handler - Basic Functionality', () => {
   });
 
   it('should skip duplicate events', async () => {
-    (mockOperationalStorage.checkEventExists as jest.Mock).mockResolvedValue(true);
+    mockOperationalStorage.checkEventExists.mockResolvedValue(true);
 
     const testEvents = [
       {
@@ -212,7 +217,7 @@ describe('Processor Handler - Basic Functionality', () => {
       },
     ];
 
-    (mockRawStorage.getRawBatch as jest.Mock).mockResolvedValueOnce({
+    mockRawStorage.getRawBatch.mockResolvedValueOnce({
       batchId: 'batch-456',
       requestId: 'req-123',
       receivedAt: '2026-01-08T06:00:00Z',
