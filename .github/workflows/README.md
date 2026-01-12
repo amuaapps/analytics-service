@@ -68,7 +68,6 @@ The workflow automatically detects which cloud provider to use:
 - `ANALYTICS_WRITE_KEY`
 
 **Azure:**
-- `AZURE_CREDENTIALS` (service principal JSON)
 - `ANALYTICS_WRITE_KEY`
 
 **Both:**
@@ -79,7 +78,10 @@ The workflow automatically detects which cloud provider to use:
 **AWS:**
 - `AWS_REGION` (default: us-east-1)
 
-**Azure:**
+**Azure (OIDC):**
+- `AZURE_CLIENT_ID` - Service principal client ID
+- `AZURE_TENANT_ID` - Azure tenant ID
+- `AZURE_SUBSCRIPTION_ID` - Azure subscription ID
 - `AZURE_RESOURCE_GROUP_PREFIX` (optional)
 
 ## Environment Configuration

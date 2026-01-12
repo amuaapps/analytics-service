@@ -454,14 +454,12 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Azure Login
+      - name: Azure Login (OIDC)
         uses: azure/login@v2
         with:
           client-id: ${{ vars.AZURE_CLIENT_ID }}
           tenant-id: ${{ vars.AZURE_TENANT_ID }}
           subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
-          # Legacy fallback (will be removed in future)
-          creds: ${{ secrets.AZURE_CREDENTIALS }}
 
       - name: Setup Bicep
         run: az bicep install
@@ -790,14 +788,12 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Azure Login
+      - name: Azure Login (OIDC)
         uses: azure/login@v2
         with:
           client-id: ${{ vars.AZURE_CLIENT_ID }}
           tenant-id: ${{ vars.AZURE_TENANT_ID }}
           subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
-          # Legacy fallback (will be removed in future)
-          creds: ${{ secrets.AZURE_CREDENTIALS }}
 
       - name: Setup Node.js
         uses: actions/setup-node@v4

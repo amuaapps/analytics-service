@@ -53,35 +53,67 @@ AWS_REGION
 
 **Required Secrets:**
 ```
-AZURE_CREDENTIALS
-  Description: Service principal credentials (JSON)
-  Value: {
-    "clientId": "...",
-    "clientSecret": "...",
-    "subscriptionId": "...",
-    "tenantId": "..."
-  }
-
 ANALYTICS_WRITE_KEY
   Description: Secret key for API authentication
   Value: your-secret-key-here
 ```
 
-### Creating Azure Service Principal
+**Required Variables (OIDC):**
+```
+AZURE_CLIENT_ID
+  Description: Service principal client ID
+  Value: 12345678-1234-1234-1234-123456789abc
+
+AZURE_TENANT_ID
+  Description: Azure tenant ID
+  Value: 87654321-4321-4321-4321-cba987654321
+
+AZURE_SUBSCRIPTION_ID
+  Description: Azure subscription ID
+  Value: abcdef12-3456-7890-abcd-ef1234567890
+```
+
+### Creating Azure Service Principal with OIDC
 
 ```bash
-# Login to Azure
+# 1. Login to Azure
 az login
 
-# Create service principal
+# 2. Create service principal (without --sdk-auth for OIDC)
 az ad sp create-for-rbac \
   --name "analytics-service-github" \
   --role contributor \
-  --scopes /subscriptions/{subscription-id} \
-  --sdk-auth
+  --scopes /subscriptions/{subscription-id}
 
-# Copy the JSON output to AZURE_CREDENTIALS secret
+# 3. Note the output values:
+#    - appId → AZURE_CLIENT_ID (add as GitHub variable)
+#    - tenant → AZURE_TENANT_ID (add as GitHub variable)
+#    - subscription → AZURE_SUBSCRIPTION_ID (add as GitHub variable)
+
+# 4. Configure federated credentials for GitHub Actions
+APP_ID="<appId-from-step-2>"
+
+az ad app federated-credential create \
+  --id $APP_ID \
+  --parameters '{
+    "name": "analytics-service-github-oidc",
+    "issuer": "https://token.actions.githubusercontent.com",
+    "subject": "repo:YOUR_ORG/analytics-service:ref:refs/heads/main",
+    "audiences": ["api://AzureADTokenExchange"]
+  }'
+
+# 5. For additional branches (develop, release), add more federated credentials:
+az ad app federated-credential create \
+  --id $APP_ID \
+  --parameters '{
+    "name": "analytics-service-github-oidc-develop",
+    "issuer": "https://token.actions.githubusercontent.com",
+    "subject": "repo:YOUR_ORG/analytics-service:ref:refs/heads/develop",
+    "audiences": ["api://AzureADTokenExchange"]
+  }'
 ```
+
+**Note:** OIDC authentication is more secure than storing credentials. No client secrets are stored in GitHub.
 
 ## GitHub Environments Setup
 

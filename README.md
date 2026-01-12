@@ -511,23 +511,48 @@ Navigate to Settings → Secrets and variables → Actions
 
 **For Azure Deployment:**
 
-| Type | Name | Description | How to Get |
-|------|------|-------------|------------|
-| Secret | `AZURE_CREDENTIALS` | Service principal JSON | See below |
-| Secret | `ANALYTICS_WRITE_KEY` | API authentication key | Generate securely |
+| Type | Name | Description | Example |
+|------|------|-------------|---------|
+| Variable | `AZURE_CLIENT_ID` | Service principal client ID | `12345678-1234-1234-1234-123456789abc` |
+| Variable | `AZURE_TENANT_ID` | Azure tenant ID | `87654321-4321-4321-4321-cba987654321` |
+| Variable | `AZURE_SUBSCRIPTION_ID` | Azure subscription ID | `abcdef12-3456-7890-abcd-ef1234567890` |
+| Secret | `ANALYTICS_WRITE_KEY` | API authentication key | `your-secret-key` |
 
-**Creating Azure Service Principal:**
+**Creating Azure Service Principal with OIDC:**
 ```bash
+# 1. Login to Azure
 az login
 
+# 2. Create service principal for GitHub OIDC
 az ad sp create-for-rbac \
   --name "analytics-service-github" \
   --role contributor \
-  --scopes /subscriptions/{subscription-id} \
-  --sdk-auth
+  --scopes /subscriptions/{subscription-id}
 
-# Copy the JSON output to AZURE_CREDENTIALS secret
+# 3. Note the output values:
+#    - appId → AZURE_CLIENT_ID
+#    - tenant → AZURE_TENANT_ID
+#    - subscription → AZURE_SUBSCRIPTION_ID
+
+# 4. Configure federated credentials for GitHub Actions
+APP_ID="<appId-from-above>"
+
+az ad app federated-credential create \
+  --id $APP_ID \
+  --parameters '{
+    "name": "analytics-service-github-oidc",
+    "issuer": "https://token.actions.githubusercontent.com",
+    "subject": "repo:YOUR_ORG/analytics-service:ref:refs/heads/main",
+    "audiences": ["api://AzureADTokenExchange"]
+  }'
+
+# 5. Add GitHub variables (not secrets):
+#    - AZURE_CLIENT_ID
+#    - AZURE_TENANT_ID
+#    - AZURE_SUBSCRIPTION_ID
 ```
+
+**Note:** This uses OpenID Connect (OIDC) for secure, keyless authentication. No secrets or passwords are stored in GitHub.
 
 #### 3. Configure Backend State (One-time Setup)
 
