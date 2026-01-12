@@ -9,9 +9,12 @@ import type { QueryEventsInput } from '../../../../src/domain/query-types.js';
 jest.mock('@aws-sdk/client-dynamodb');
 jest.mock('@aws-sdk/util-dynamodb');
 
+const MockedDynamoDBClient = jest.mocked(DynamoDBClient);
+const mockedMarshall = jest.mocked(marshall);
+
 describe('DynamoDBEventRepository - Query Logic', () => {
   let repository: DynamoDBEventRepository;
-  let mockClient: any;
+  let mockSend: jest.Mock;
   let mockLogger: any;
 
   beforeEach(() => {
@@ -24,12 +27,16 @@ describe('DynamoDBEventRepository - Query Logic', () => {
       debug: jest.fn(),
     } as unknown as jest.Mocked<Logger>;
 
-    mockClient = {
-      send: jest.fn(),
-    } as unknown as jest.Mocked<DynamoDBClient>;
+    mockSend = jest.fn();
 
-    (DynamoDBClient as any).mockImplementation(() => mockClient);
-    (marshall as jest.Mock).mockImplementation((obj) => obj as any);
+    MockedDynamoDBClient.mockImplementation(
+      () =>
+        ({
+          send: mockSend,
+        }) as any
+    );
+
+    mockedMarshall.mockImplementation((obj: any) => obj);
 
     repository = new DynamoDBEventRepository({
       tableName: 'test-table',
@@ -40,7 +47,7 @@ describe('DynamoDBEventRepository - Query Logic', () => {
 
   describe('Primary Index Queries (appId)', () => {
     it('should query by appId with no time range', async () => {
-      mockClient.send.mockResolvedValueOnce({ Items: [] });
+      (mockSend as any).mockResolvedValueOnce({ Items: [] });
 
       const input: QueryEventsInput = {
         appId: 'test-app',
@@ -49,7 +56,7 @@ describe('DynamoDBEventRepository - Query Logic', () => {
 
       await repository.queryEvents(input);
 
-      expect(mockClient.send).toHaveBeenCalledWith(
+      expect(mockSend).toHaveBeenCalledWith(
         expect.objectContaining({
           input: expect.objectContaining({
             TableName: 'test-table',
@@ -61,7 +68,7 @@ describe('DynamoDBEventRepository - Query Logic', () => {
     });
 
     it('should query by appId with from and to time range using BETWEEN', async () => {
-      mockClient.send.mockResolvedValueOnce({ Items: [] });
+      (mockSend as any).mockResolvedValueOnce({ Items: [] });
 
       const input: QueryEventsInput = {
         appId: 'test-app',
@@ -71,13 +78,13 @@ describe('DynamoDBEventRepository - Query Logic', () => {
 
       await repository.queryEvents(input);
 
-      const call = mockClient.send.mock.calls[0][0];
+      const call = mockSend.mock.calls[0][0] as any;
       expect(call.input.KeyConditionExpression).toBe('PK = :appId AND SK BETWEEN :from AND :to');
       expect(call.input.IndexName).toBeUndefined();
     });
 
     it('should use key-bound strategy for time range with composite SK (occurredAt#eventId)', async () => {
-      mockClient.send.mockResolvedValueOnce({ Items: [] });
+      (mockSend as any).mockResolvedValueOnce({ Items: [] });
 
       const input: QueryEventsInput = {
         appId: 'test-app',
@@ -87,7 +94,7 @@ describe('DynamoDBEventRepository - Query Logic', () => {
 
       await repository.queryEvents(input);
 
-      const call = mockClient.send.mock.calls[0][0];
+      const call = mockSend.mock.calls[0][0] as any;
       const marshalledValues = call.input.ExpressionAttributeValues;
 
       // Key-bound strategy: append '#' to timestamps
@@ -98,7 +105,7 @@ describe('DynamoDBEventRepository - Query Logic', () => {
     });
 
     it('should use < operator for exclusive "to" when only "to" is provided', async () => {
-      mockClient.send.mockResolvedValueOnce({ Items: [] });
+      (mockSend as any).mockResolvedValueOnce({ Items: [] });
 
       const input = {
         appId: 'test-app',
@@ -108,14 +115,14 @@ describe('DynamoDBEventRepository - Query Logic', () => {
 
       await repository.queryEvents(input);
 
-      const call = mockClient.send.mock.calls[0][0];
+      const call = mockSend.mock.calls[0][0] as any;
       expect(call.input.KeyConditionExpression).toContain('< :to');
     });
   });
 
   describe('GSI1 Queries (userId)', () => {
     it('should query by userId using GSI1 and GSI1SK for time range', async () => {
-      mockClient.send.mockResolvedValueOnce({ Items: [] });
+      (mockSend as any).mockResolvedValueOnce({ Items: [] });
 
       const input: QueryEventsInput = {
         appId: 'test-app',
@@ -125,13 +132,13 @@ describe('DynamoDBEventRepository - Query Logic', () => {
 
       await repository.queryEvents(input);
 
-      const call = mockClient.send.mock.calls[0][0];
+      const call = mockSend.mock.calls[0][0] as any;
       expect(call.input.IndexName).toBe('GSI1');
       expect(call.input.KeyConditionExpression).toBe('GSI1PK = :compositeKey AND GSI1SK >= :from');
     });
 
     it('should use composite key appId#userId for GSI1PK', async () => {
-      mockClient.send.mockResolvedValueOnce({ Items: [] });
+      (mockSend as any).mockResolvedValueOnce({ Items: [] });
 
       const input: QueryEventsInput = {
         appId: 'test-app',
@@ -141,13 +148,13 @@ describe('DynamoDBEventRepository - Query Logic', () => {
 
       await repository.queryEvents(input);
 
-      const call = mockClient.send.mock.calls[0][0];
+      const call = mockSend.mock.calls[0][0] as any;
       const marshalledValues = call.input.ExpressionAttributeValues;
       expect(marshalledValues[':compositeKey']).toBe('test-app#user-123');
     });
 
     it('should use GSI1SK with BETWEEN for userId query with time range', async () => {
-      mockClient.send.mockResolvedValueOnce({ Items: [] });
+      (mockSend as any).mockResolvedValueOnce({ Items: [] });
 
       const input: QueryEventsInput = {
         appId: 'test-app',
@@ -158,7 +165,7 @@ describe('DynamoDBEventRepository - Query Logic', () => {
 
       await repository.queryEvents(input);
 
-      const call = mockClient.send.mock.calls[0][0];
+      const call = mockSend.mock.calls[0][0] as any;
       expect(call.input.IndexName).toBe('GSI1');
       expect(call.input.KeyConditionExpression).toBe(
         'GSI1PK = :compositeKey AND GSI1SK BETWEEN :from AND :to'
@@ -168,7 +175,7 @@ describe('DynamoDBEventRepository - Query Logic', () => {
 
   describe('GSI2 Queries (sessionId)', () => {
     it('should query by sessionId using GSI2 and GSI2SK for time range', async () => {
-      mockClient.send.mockResolvedValueOnce({ Items: [] });
+      (mockSend as any).mockResolvedValueOnce({ Items: [] });
 
       const input: QueryEventsInput = {
         appId: 'test-app',
@@ -178,13 +185,13 @@ describe('DynamoDBEventRepository - Query Logic', () => {
 
       await repository.queryEvents(input);
 
-      const call = mockClient.send.mock.calls[0][0];
+      const call = mockSend.mock.calls[0][0] as any;
       expect(call.input.IndexName).toBe('GSI2');
       expect(call.input.KeyConditionExpression).toBe('GSI2PK = :compositeKey AND GSI2SK >= :from');
     });
 
     it('should use composite key appId#sessionId for GSI2PK', async () => {
-      mockClient.send.mockResolvedValueOnce({ Items: [] });
+      (mockSend as any).mockResolvedValueOnce({ Items: [] });
 
       const input: QueryEventsInput = {
         appId: 'test-app',
@@ -194,13 +201,13 @@ describe('DynamoDBEventRepository - Query Logic', () => {
 
       await repository.queryEvents(input);
 
-      const call = mockClient.send.mock.calls[0][0];
+      const call = mockSend.mock.calls[0][0] as any;
       const marshalledValues = call.input.ExpressionAttributeValues;
       expect(marshalledValues[':compositeKey']).toBe('test-app#session-456');
     });
 
     it('should use GSI2SK with BETWEEN for sessionId query with time range', async () => {
-      mockClient.send.mockResolvedValueOnce({ Items: [] });
+      (mockSend as any).mockResolvedValueOnce({ Items: [] });
 
       const input: QueryEventsInput = {
         appId: 'test-app',
@@ -211,7 +218,7 @@ describe('DynamoDBEventRepository - Query Logic', () => {
 
       await repository.queryEvents(input);
 
-      const call = mockClient.send.mock.calls[0][0];
+      const call = mockSend.mock.calls[0][0] as any;
       expect(call.input.IndexName).toBe('GSI2');
       expect(call.input.KeyConditionExpression).toBe(
         'GSI2PK = :compositeKey AND GSI2SK BETWEEN :from AND :to'
@@ -221,7 +228,7 @@ describe('DynamoDBEventRepository - Query Logic', () => {
 
   describe('Pagination', () => {
     it('should request limit + 1 items to determine hasMore', async () => {
-      mockClient.send.mockResolvedValueOnce({ Items: [] });
+      (mockSend as any).mockResolvedValueOnce({ Items: [] });
 
       const input: QueryEventsInput = {
         appId: 'test-app',
@@ -231,7 +238,7 @@ describe('DynamoDBEventRepository - Query Logic', () => {
 
       await repository.queryEvents(input);
 
-      const call = mockClient.send.mock.calls[0][0];
+      const call = mockSend.mock.calls[0][0] as any;
       expect(call.input.Limit).toBe(11); // limit + 1
     });
 
@@ -242,7 +249,7 @@ describe('DynamoDBEventRepository - Query Logic', () => {
         source: { appId: 'test-app' },
       }));
 
-      mockClient.send.mockResolvedValueOnce({ Items: mockItems as any });
+      (mockSend as any).mockResolvedValueOnce({ Items: mockItems as any });
 
       const input: QueryEventsInput = {
         appId: 'test-app',
@@ -263,7 +270,7 @@ describe('DynamoDBEventRepository - Query Logic', () => {
         source: { appId: 'test-app' },
       }));
 
-      mockClient.send.mockResolvedValueOnce({ Items: mockItems as any });
+      (mockSend as any).mockResolvedValueOnce({ Items: mockItems as any });
 
       const input: QueryEventsInput = {
         appId: 'test-app',
@@ -284,7 +291,7 @@ describe('DynamoDBEventRepository - Query Logic', () => {
         source: { appId: 'test-app' },
       }));
 
-      mockClient.send.mockResolvedValueOnce({ Items: mockItems as any });
+      (mockSend as any).mockResolvedValueOnce({ Items: mockItems as any });
 
       const input: QueryEventsInput = {
         appId: 'test-app',
@@ -306,7 +313,7 @@ describe('DynamoDBEventRepository - Query Logic', () => {
         actor: { userId: 'user-123' },
       }));
 
-      mockClient.send.mockResolvedValueOnce({ Items: mockItems as any });
+      (mockSend as any).mockResolvedValueOnce({ Items: mockItems as any });
 
       const input: QueryEventsInput = {
         appId: 'test-app',
@@ -322,7 +329,7 @@ describe('DynamoDBEventRepository - Query Logic', () => {
     });
 
     it('should parse cursor and set ExclusiveStartKey with all required keys for GSI1', async () => {
-      mockClient.send.mockResolvedValueOnce({ Items: [] });
+      (mockSend as any).mockResolvedValueOnce({ Items: [] });
 
       // New cursor format: uses table PK (appId) only
       const mockCursor = Buffer.from(
@@ -338,7 +345,7 @@ describe('DynamoDBEventRepository - Query Logic', () => {
 
       await repository.queryEvents(input);
 
-      const call = mockClient.send.mock.calls[0][0];
+      const call = mockSend.mock.calls[0][0] as any;
       const exclusiveStartKey = call.input.ExclusiveStartKey;
 
       expect(exclusiveStartKey).toBeDefined();
@@ -351,7 +358,7 @@ describe('DynamoDBEventRepository - Query Logic', () => {
     });
 
     it('should support backward compatibility with old cursor format (composite keys)', async () => {
-      mockClient.send.mockResolvedValueOnce({ Items: [] });
+      (mockSend as any).mockResolvedValueOnce({ Items: [] });
 
       // Old cursor format: contains composite key
       const mockCursor = Buffer.from(
@@ -367,7 +374,7 @@ describe('DynamoDBEventRepository - Query Logic', () => {
 
       await repository.queryEvents(input);
 
-      const call = mockClient.send.mock.calls[0][0];
+      const call = mockSend.mock.calls[0][0] as any;
       const exclusiveStartKey = call.input.ExclusiveStartKey;
 
       expect(exclusiveStartKey).toBeDefined();
@@ -387,7 +394,7 @@ describe('DynamoDBEventRepository - Query Logic', () => {
         source: { appId: 'test-app' },
         actor: { userId: 'user-123' },
       }));
-      mockClient.send.mockResolvedValueOnce({ Items: firstPageItems as any });
+      (mockSend as any).mockResolvedValueOnce({ Items: firstPageItems as any });
 
       const firstInput: QueryEventsInput = {
         appId: 'test-app',
@@ -409,7 +416,7 @@ describe('DynamoDBEventRepository - Query Logic', () => {
         source: { appId: 'test-app' },
         actor: { userId: 'user-123' },
       }));
-      mockClient.send.mockResolvedValueOnce({ Items: secondPageItems as any });
+      (mockSend as any).mockResolvedValueOnce({ Items: secondPageItems as any });
 
       const secondInput: QueryEventsInput = {
         appId: 'test-app',
@@ -424,8 +431,8 @@ describe('DynamoDBEventRepository - Query Logic', () => {
       expect(secondResult.hasMore).toBe(false);
       expect(secondResult.events).toHaveLength(5);
 
-      // Verify second query used ExclusiveStartKey
-      const secondCall = mockClient.send.mock.calls[1][0];
+      // Verify second query used cursor correctly
+      const secondCall = mockSend.mock.calls[1][0] as any;
       expect(secondCall.input.ExclusiveStartKey).toBeDefined();
       expect(secondCall.input.ExclusiveStartKey.PK).toBe('test-app');
       expect(secondCall.input.ExclusiveStartKey.GSI1PK).toBe('test-app#user-123');
@@ -439,7 +446,7 @@ describe('DynamoDBEventRepository - Query Logic', () => {
         source: { appId: 'test-app' },
         context: { sessionId: 'session-456' },
       }));
-      mockClient.send.mockResolvedValueOnce({ Items: firstPageItems as any });
+      (mockSend as any).mockResolvedValueOnce({ Items: firstPageItems as any });
 
       const firstInput: QueryEventsInput = {
         appId: 'test-app',
@@ -460,7 +467,7 @@ describe('DynamoDBEventRepository - Query Logic', () => {
         source: { appId: 'test-app' },
         context: { sessionId: 'session-456' },
       }));
-      mockClient.send.mockResolvedValueOnce({ Items: secondPageItems as any });
+      (mockSend as any).mockResolvedValueOnce({ Items: secondPageItems as any });
 
       const secondInput: QueryEventsInput = {
         appId: 'test-app',
@@ -476,7 +483,7 @@ describe('DynamoDBEventRepository - Query Logic', () => {
       expect(secondResult.events).toHaveLength(3);
 
       // Verify ExclusiveStartKey for GSI2
-      const secondCall = mockClient.send.mock.calls[1][0];
+      const secondCall = mockSend.mock.calls[1][0] as any;
       expect(secondCall.input.ExclusiveStartKey).toBeDefined();
       expect(secondCall.input.ExclusiveStartKey.PK).toBe('test-app');
       expect(secondCall.input.ExclusiveStartKey.GSI2PK).toBe('test-app#session-456');
@@ -485,7 +492,7 @@ describe('DynamoDBEventRepository - Query Logic', () => {
 
   describe('Sort Order', () => {
     it('should use ScanIndexForward=false for descending sort (default)', async () => {
-      mockClient.send.mockResolvedValueOnce({ Items: [] });
+      (mockSend as any).mockResolvedValueOnce({ Items: [] });
 
       const input: QueryEventsInput = {
         appId: 'test-app',
@@ -495,12 +502,12 @@ describe('DynamoDBEventRepository - Query Logic', () => {
 
       await repository.queryEvents(input);
 
-      const call = mockClient.send.mock.calls[0][0];
+      const call = mockSend.mock.calls[0][0] as any;
       expect(call.input.ScanIndexForward).toBe(false);
     });
 
     it('should use ScanIndexForward=true for ascending sort', async () => {
-      mockClient.send.mockResolvedValueOnce({ Items: [] });
+      (mockSend as any).mockResolvedValueOnce({ Items: [] });
 
       const input: QueryEventsInput = {
         appId: 'test-app',
@@ -510,14 +517,14 @@ describe('DynamoDBEventRepository - Query Logic', () => {
 
       await repository.queryEvents(input);
 
-      const call = mockClient.send.mock.calls[0][0];
+      const call = mockSend.mock.calls[0][0] as any;
       expect(call.input.ScanIndexForward).toBe(true);
     });
   });
 
   describe('Time Range Edge Cases', () => {
     it('should handle only "from" parameter with key-bound strategy', async () => {
-      mockClient.send.mockResolvedValueOnce({ Items: [] });
+      (mockSend as any).mockResolvedValueOnce({ Items: [] });
 
       const input: QueryEventsInput = {
         appId: 'test-app',
@@ -526,13 +533,13 @@ describe('DynamoDBEventRepository - Query Logic', () => {
 
       await repository.queryEvents(input);
 
-      const call = mockClient.send.mock.calls[0][0];
+      const call = mockSend.mock.calls[0][0] as any;
       expect(call.input.KeyConditionExpression).toBe('PK = :appId AND SK >= :from');
       expect(call.input.ExpressionAttributeValues[':from']).toBe('2026-01-01T00:00:00.000Z#');
     });
 
     it('should handle only "to" parameter with exclusive key-bound', async () => {
-      mockClient.send.mockResolvedValueOnce({ Items: [] });
+      (mockSend as any).mockResolvedValueOnce({ Items: [] });
 
       const input = {
         appId: 'test-app',
@@ -542,13 +549,13 @@ describe('DynamoDBEventRepository - Query Logic', () => {
 
       await repository.queryEvents(input);
 
-      const call = mockClient.send.mock.calls[0][0];
+      const call = mockSend.mock.calls[0][0] as any;
       expect(call.input.KeyConditionExpression).toContain('BETWEEN');
       expect(call.input.ExpressionAttributeValues[':to']).toBe('2026-01-02T00:00:00.000Z#');
     });
 
     it('should handle neither "from" nor "to" parameters', async () => {
-      mockClient.send.mockResolvedValueOnce({ Items: [] });
+      (mockSend as any).mockResolvedValueOnce({ Items: [] });
 
       const input = {
         appId: 'test-app',
@@ -557,7 +564,7 @@ describe('DynamoDBEventRepository - Query Logic', () => {
 
       await repository.queryEvents(input);
 
-      const call = mockClient.send.mock.calls[0][0];
+      const call = mockSend.mock.calls[0][0] as any;
       const toBound = call.input.ExpressionAttributeValues[':to'];
 
       // Upper bound 'to#' excludes all events at to
@@ -567,7 +574,7 @@ describe('DynamoDBEventRepository - Query Logic', () => {
     });
 
     it('should include events before "to" timestamp (to - epsilon)', async () => {
-      mockClient.send.mockResolvedValueOnce({ Items: [] });
+      (mockSend as any).mockResolvedValueOnce({ Items: [] });
 
       const input: QueryEventsInput = {
         appId: 'test-app',
@@ -577,7 +584,7 @@ describe('DynamoDBEventRepository - Query Logic', () => {
 
       await repository.queryEvents(input);
 
-      const call = mockClient.send.mock.calls[0][0];
+      const call = mockSend.mock.calls[0][0] as any;
       const toBound = call.input.ExpressionAttributeValues[':to'];
 
       // Events before 'to' are included
@@ -590,7 +597,7 @@ describe('DynamoDBEventRepository - Query Logic', () => {
 
     it('should use correct bounds for single-sided ranges', async () => {
       // Test only 'from' parameter
-      mockClient.send.mockResolvedValueOnce({ Items: [] });
+      (mockSend as any).mockResolvedValueOnce({ Items: [] });
 
       const inputFrom: QueryEventsInput = {
         appId: 'test-app',
@@ -599,7 +606,7 @@ describe('DynamoDBEventRepository - Query Logic', () => {
 
       await repository.queryEvents(inputFrom);
 
-      const callFrom = mockClient.send.mock.calls[0][0];
+      const callFrom = mockSend.mock.calls[0][0] as any;
       expect(callFrom.input.ExpressionAttributeValues[':from']).toBe('2026-01-01T00:00:00.000Z#');
       expect(callFrom.input.KeyConditionExpression).toContain('>= :from');
     });
@@ -607,7 +614,7 @@ describe('DynamoDBEventRepository - Query Logic', () => {
 
   describe('FilterExpression - Types Filtering', () => {
     it('should filter by single event type using FilterExpression', async () => {
-      mockClient.send.mockResolvedValueOnce({ Items: [] });
+      (mockSend as any).mockResolvedValueOnce({ Items: [] });
 
       const input: QueryEventsInput = {
         appId: 'test-app',
@@ -617,14 +624,14 @@ describe('DynamoDBEventRepository - Query Logic', () => {
 
       await repository.queryEvents(input);
 
-      const call = mockClient.send.mock.calls[0][0];
+      const call = mockSend.mock.calls[0][0] as any;
       expect(call.input.FilterExpression).toBe('#type IN (:type0)');
       expect(call.input.ExpressionAttributeNames).toEqual({ '#type': 'type' });
       expect(call.input.ExpressionAttributeValues[':type0']).toBe('track');
     });
 
     it('should filter by multiple event types using IN operator', async () => {
-      mockClient.send.mockResolvedValueOnce({ Items: [] });
+      (mockSend as any).mockResolvedValueOnce({ Items: [] });
 
       const input: QueryEventsInput = {
         appId: 'test-app',
@@ -634,7 +641,7 @@ describe('DynamoDBEventRepository - Query Logic', () => {
 
       await repository.queryEvents(input);
 
-      const call = mockClient.send.mock.calls[0][0];
+      const call = mockSend.mock.calls[0][0] as any;
       expect(call.input.FilterExpression).toBe('#type IN (:type0, :type1, :type2)');
       expect(call.input.ExpressionAttributeNames).toEqual({ '#type': 'type' });
       expect(call.input.ExpressionAttributeValues[':type0']).toBe('track');
@@ -643,7 +650,7 @@ describe('DynamoDBEventRepository - Query Logic', () => {
     });
 
     it('should not add FilterExpression when types array is empty', async () => {
-      mockClient.send.mockResolvedValueOnce({ Items: [] });
+      (mockSend as any).mockResolvedValueOnce({ Items: [] });
 
       const input: QueryEventsInput = {
         appId: 'test-app',
@@ -653,13 +660,13 @@ describe('DynamoDBEventRepository - Query Logic', () => {
 
       await repository.queryEvents(input);
 
-      const call = mockClient.send.mock.calls[0][0];
+      const call = mockSend.mock.calls[0][0] as any;
       expect(call.input.FilterExpression).toBeUndefined();
       expect(call.input.ExpressionAttributeNames).toBeUndefined();
     });
 
     it('should use expression attribute names for reserved keyword "type"', async () => {
-      mockClient.send.mockResolvedValueOnce({ Items: [] });
+      (mockSend as any).mockResolvedValueOnce({ Items: [] });
 
       const input: QueryEventsInput = {
         appId: 'test-app',
@@ -669,7 +676,7 @@ describe('DynamoDBEventRepository - Query Logic', () => {
 
       await repository.queryEvents(input);
 
-      const call = mockClient.send.mock.calls[0][0];
+      const call = mockSend.mock.calls[0][0] as any;
       // Verify we use #type placeholder, not raw 'type'
       expect(call.input.FilterExpression).toContain('#type');
       expect(call.input.FilterExpression).not.toContain('type IN');
@@ -679,7 +686,7 @@ describe('DynamoDBEventRepository - Query Logic', () => {
 
   describe('FilterExpression - Names Filtering', () => {
     it('should filter by single event name using FilterExpression', async () => {
-      mockClient.send.mockResolvedValueOnce({ Items: [] });
+      (mockSend as any).mockResolvedValueOnce({ Items: [] });
 
       const input: QueryEventsInput = {
         appId: 'test-app',
@@ -689,14 +696,14 @@ describe('DynamoDBEventRepository - Query Logic', () => {
 
       await repository.queryEvents(input);
 
-      const call = mockClient.send.mock.calls[0][0];
+      const call = mockSend.mock.calls[0][0] as any;
       expect(call.input.FilterExpression).toBe('#name IN (:name0)');
       expect(call.input.ExpressionAttributeNames).toEqual({ '#name': 'name' });
       expect(call.input.ExpressionAttributeValues[':name0']).toBe('Button Clicked');
     });
 
     it('should filter by multiple event names using IN operator', async () => {
-      mockClient.send.mockResolvedValueOnce({ Items: [] });
+      (mockSend as any).mockResolvedValueOnce({ Items: [] });
 
       const input: QueryEventsInput = {
         appId: 'test-app',
@@ -706,7 +713,7 @@ describe('DynamoDBEventRepository - Query Logic', () => {
 
       await repository.queryEvents(input);
 
-      const call = mockClient.send.mock.calls[0][0];
+      const call = mockSend.mock.calls[0][0] as any;
       expect(call.input.FilterExpression).toBe('#name IN (:name0, :name1, :name2)');
       expect(call.input.ExpressionAttributeNames).toEqual({ '#name': 'name' });
       expect(call.input.ExpressionAttributeValues[':name0']).toBe('Button Clicked');
@@ -715,7 +722,7 @@ describe('DynamoDBEventRepository - Query Logic', () => {
     });
 
     it('should not add FilterExpression when names array is empty', async () => {
-      mockClient.send.mockResolvedValueOnce({ Items: [] });
+      (mockSend as any).mockResolvedValueOnce({ Items: [] });
 
       const input: QueryEventsInput = {
         appId: 'test-app',
@@ -725,13 +732,13 @@ describe('DynamoDBEventRepository - Query Logic', () => {
 
       await repository.queryEvents(input);
 
-      const call = mockClient.send.mock.calls[0][0];
+      const call = mockSend.mock.calls[0][0] as any;
       expect(call.input.FilterExpression).toBeUndefined();
       expect(call.input.ExpressionAttributeNames).toBeUndefined();
     });
 
     it('should use expression attribute names for reserved keyword "name"', async () => {
-      mockClient.send.mockResolvedValueOnce({ Items: [] });
+      (mockSend as any).mockResolvedValueOnce({ Items: [] });
 
       const input: QueryEventsInput = {
         appId: 'test-app',
@@ -741,7 +748,7 @@ describe('DynamoDBEventRepository - Query Logic', () => {
 
       await repository.queryEvents(input);
 
-      const call = mockClient.send.mock.calls[0][0];
+      const call = mockSend.mock.calls[0][0] as any;
       // Verify we use #name placeholder, not raw 'name'
       expect(call.input.FilterExpression).toContain('#name');
       expect(call.input.FilterExpression).not.toContain('name IN');
@@ -751,7 +758,7 @@ describe('DynamoDBEventRepository - Query Logic', () => {
 
   describe('FilterExpression - Combined Filters', () => {
     it('should combine types and names filters with AND', async () => {
-      mockClient.send.mockResolvedValueOnce({ Items: [] });
+      (mockSend as any).mockResolvedValueOnce({ Items: [] });
 
       const input: QueryEventsInput = {
         appId: 'test-app',
@@ -762,7 +769,7 @@ describe('DynamoDBEventRepository - Query Logic', () => {
 
       await repository.queryEvents(input);
 
-      const call = mockClient.send.mock.calls[0][0];
+      const call = mockSend.mock.calls[0][0] as any;
       expect(call.input.FilterExpression).toBe(
         '#type IN (:type0, :type1) AND #name IN (:name0, :name1)'
       );
@@ -777,7 +784,7 @@ describe('DynamoDBEventRepository - Query Logic', () => {
     });
 
     it('should combine anonymousId, types, and names filters', async () => {
-      mockClient.send.mockResolvedValueOnce({ Items: [] });
+      (mockSend as any).mockResolvedValueOnce({ Items: [] });
 
       const input: QueryEventsInput = {
         appId: 'test-app',
@@ -789,7 +796,7 @@ describe('DynamoDBEventRepository - Query Logic', () => {
 
       await repository.queryEvents(input);
 
-      const call = mockClient.send.mock.calls[0][0];
+      const call = mockSend.mock.calls[0][0] as any;
       expect(call.input.FilterExpression).toBe(
         'actor.anonymousId = :anonymousId AND #type IN (:type0) AND #name IN (:name0)'
       );
@@ -803,7 +810,7 @@ describe('DynamoDBEventRepository - Query Logic', () => {
     });
 
     it('should work with userId query and types filter', async () => {
-      mockClient.send.mockResolvedValueOnce({ Items: [] });
+      (mockSend as any).mockResolvedValueOnce({ Items: [] });
 
       const input: QueryEventsInput = {
         appId: 'test-app',
@@ -814,7 +821,7 @@ describe('DynamoDBEventRepository - Query Logic', () => {
 
       await repository.queryEvents(input);
 
-      const call = mockClient.send.mock.calls[0][0];
+      const call = mockSend.mock.calls[0][0] as any;
       expect(call.input.IndexName).toBe('GSI1');
       expect(call.input.KeyConditionExpression).toBe('GSI1PK = :compositeKey AND GSI1SK >= :from');
       expect(call.input.FilterExpression).toBe('#type IN (:type0, :type1)');
@@ -822,7 +829,7 @@ describe('DynamoDBEventRepository - Query Logic', () => {
     });
 
     it('should work with sessionId query and names filter', async () => {
-      mockClient.send.mockResolvedValueOnce({ Items: [] });
+      (mockSend as any).mockResolvedValueOnce({ Items: [] });
 
       const input: QueryEventsInput = {
         appId: 'test-app',
@@ -833,7 +840,7 @@ describe('DynamoDBEventRepository - Query Logic', () => {
 
       await repository.queryEvents(input);
 
-      const call = mockClient.send.mock.calls[0][0];
+      const call = mockSend.mock.calls[0][0] as any;
       expect(call.input.IndexName).toBe('GSI2');
       expect(call.input.KeyConditionExpression).toBe('GSI2PK = :compositeKey AND GSI2SK >= :from');
       expect(call.input.FilterExpression).toBe('#name IN (:name0)');
@@ -841,7 +848,7 @@ describe('DynamoDBEventRepository - Query Logic', () => {
     });
 
     it('should handle all filters together', async () => {
-      mockClient.send.mockResolvedValueOnce({ Items: [] });
+      (mockSend as any).mockResolvedValueOnce({ Items: [] });
 
       const input: QueryEventsInput = {
         appId: 'test-app',
@@ -855,7 +862,7 @@ describe('DynamoDBEventRepository - Query Logic', () => {
 
       await repository.queryEvents(input);
 
-      const call = mockClient.send.mock.calls[0][0];
+      const call = mockSend.mock.calls[0][0] as any;
       expect(call.input.IndexName).toBe('GSI1');
       expect(call.input.KeyConditionExpression).toContain('GSI1PK = :compositeKey');
       expect(call.input.FilterExpression).toBe(
