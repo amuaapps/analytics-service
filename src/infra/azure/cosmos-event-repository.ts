@@ -21,6 +21,15 @@ export interface CosmosEventRepositoryConfig {
  * - Composite indexes on occurredAt, userId, sessionId for query performance
  * - TTL enabled for automatic data expiration (optional)
  */
+/**
+ * Minimal type for Cosmos DB bulk operation response items
+ * Only includes fields we actually read for error handling
+ */
+interface CosmosBulkResponseItem {
+  statusCode: number;
+  resourceBody?: unknown;
+}
+
 export class CosmosEventRepository implements EventRepository {
   private container: Container;
   private logger: Logger;
@@ -50,13 +59,13 @@ export class CosmosEventRepository implements EventRepository {
 
       // Check for real failures (excluding 409 conflicts which shouldn't happen with Upsert)
       // Upsert returns 200 (OK) for updates and 201 (Created) for new items
-      const failures = response.filter((r: { statusCode: number }) => r.statusCode >= 400);
+      const failures = response.filter((r: CosmosBulkResponseItem) => r.statusCode >= 400);
       
       if (failures.length > 0) {
         // Log details about failures for debugging
         this.logger.error(
           { 
-            failures: failures.map((f: any) => ({
+            failures: failures.map((f: CosmosBulkResponseItem) => ({
               statusCode: f.statusCode,
               resourceBody: f.resourceBody,
             })),

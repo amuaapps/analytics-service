@@ -1,12 +1,11 @@
 import type { HttpRequest, HttpResponseInit, InvocationContext } from '@azure/functions';
 import { handleQuery } from '../core/query-handler.js';
-import type { CoreQueryRequest } from '../core/types.js';
+import type { CoreQueryRequest, CoreQueryResponse } from '../core/types.js';
 import type { EventRepository } from '../../infra/interfaces.js';
 import type { Logger } from '../../utils/logger.js';
 import { getOrGenerateRequestId } from '../../utils/correlation.js';
 import { validateQueryEventsInput } from '../../domain/query-validation.js';
 import type { QueryEventsInput } from '../../domain/query-types.js';
-import { mapStoredEventToApiEvent } from '../../domain/event-mapper.js';
 
 export interface AzureFunctionQueryDependencies {
   logger: Logger;
@@ -73,18 +72,11 @@ async function createCoreRequest(request: HttpRequest): Promise<CoreQueryRequest
   };
 }
 
-function createSuccessResponse(result: {
-  events: unknown[];
-  cursor?: string;
-  hasMore: boolean;
-}): HttpResponseInit {
-  // Map stored events to API events (remove internal metadata)
-  // Type assertion safe here because core handler returns StoredEvent[]
-  const apiEvents = result.events.map((event) => mapStoredEventToApiEvent(event as any));
-
+function createSuccessResponse(result: CoreQueryResponse): HttpResponseInit {
+  // Core handler already returns ApiEvent[] (mapping done in core layer)
   // Build response matching spec format (items + nextCursor)
   const response = {
-    items: apiEvents,
+    items: result.events,
     ...(result.cursor ? { nextCursor: result.cursor } : {}),
   };
 

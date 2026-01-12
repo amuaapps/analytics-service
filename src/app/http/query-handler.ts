@@ -4,23 +4,11 @@ import { createChildLogger } from '../../utils/index.js';
 import { validateQueryEventsInput } from '../../domain/query-validation.js';
 import { handleQuery } from '../core/query-handler.js';
 import type { EventRepository } from '../../infra/interfaces.js';
-import type { StoredEvent } from '../../domain/stored-event-types.js';
 import { sendErrorResponse, ValidationError, isZodError, sanitizeZodError } from './errors.js';
 
 export interface QueryHttpHandlerDependencies {
   logger: Logger;
   storageAdapter: EventRepository;
-}
-
-function sanitizeEventForResponse(event: StoredEvent): StoredEvent {
-  const sanitized = { ...event };
-  
-  // Remove any internal metadata fields that shouldn't be exposed
-  // The spec says: "Internal-only metadata (not exposed via API)"
-  // For now, we return the canonical fields as-is since our storage
-  // adapters should only store canonical fields
-  
-  return sanitized;
 }
 
 export function createQueryHttpHandler(deps: QueryHttpHandlerDependencies) {
@@ -52,18 +40,16 @@ export function createQueryHttpHandler(deps: QueryHttpHandlerDependencies) {
         }
       );
 
-      // Sanitize events for response (remove internal metadata)
-      const sanitizedEvents = result.events.map(sanitizeEventForResponse);
-
-      // Build response matching spec format
+      // Core handler already returns ApiEvent[] (internal metadata stripped)
+      // Build response matching spec format (items + nextCursor)
       const response = {
-        items: sanitizedEvents,
+        items: result.events,
         ...(result.cursor ? { nextCursor: result.cursor } : {}),
       };
 
       requestLogger.info(
         {
-          eventCount: sanitizedEvents.length,
+          eventCount: result.events.length,
           hasMore: !!result.cursor,
         },
         'Query completed successfully'

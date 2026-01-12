@@ -106,18 +106,21 @@ export async function handleProcessor(
     };
   }
 
+  // Use normalized events from validation (sessionId canonicalized to context.sessionId)
+  const normalizedEvents = validationResult.data.events;
+
   // Use receivedAt from the pointer message (set during ingest)
   const processedAt = new Date().toISOString();
 
-  // Check for duplicates (idempotency)
+  // Check for duplicates (idempotency) using normalized events
   const duplicateChecks = await Promise.allSettled(
-    events.map((event) => operationalStorage.checkEventExists(event.eventId))
+    normalizedEvents.map((event) => operationalStorage.checkEventExists(event.eventId))
   );
 
-  const newEvents: typeof events = [];
+  const newEvents: typeof normalizedEvents = [];
   const skippedEvents: Array<{ eventId: string; reason: string }> = [];
 
-  events.forEach((event, index) => {
+  normalizedEvents.forEach((event, index) => {
     const checkResult = duplicateChecks[index];
     if (checkResult.status === 'fulfilled' && checkResult.value === true) {
       skippedEvents.push({
@@ -138,6 +141,7 @@ export async function handleProcessor(
     };
   }
 
+  // Transform normalized events to stored events
   const storedEvents: StoredEvent[] = newEvents.map((event) =>
     transformToStoredEvent(event, { receivedAt, processedAt })
   );

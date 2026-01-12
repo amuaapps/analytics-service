@@ -1,7 +1,7 @@
 import type { Request, Response, NextFunction } from 'express';
 import { ZodError } from 'zod';
 import type { Logger } from '../../utils/logger.js';
-import { createIngestRequestEnvelopeSchema } from '../../domain/validation.js';
+import { createValidateIngestRequestEnvelope } from '../../domain/validation.js';
 import { ValidationError, sendErrorResponse } from '../http/errors.js';
 import type { LimitsConfig } from '../../config/types.js';
 
@@ -32,13 +32,13 @@ function sanitizeErrorMessage(message: string): string {
 }
 
 export function createValidationMiddleware(logger: Logger, limits: LimitsConfig) {
-  const ingestRequestEnvelopeSchema = createIngestRequestEnvelopeSchema(limits);
+  const validateIngestRequestEnvelope = createValidateIngestRequestEnvelope(limits);
   
   return (req: Request, res: Response, next: NextFunction): void => {
     const requestId = req.id ?? 'unknown';
     
     try {
-      const result = ingestRequestEnvelopeSchema.safeParse(req.body);
+      const result = validateIngestRequestEnvelope(req.body);
 
       if (!result.success) {
         const sanitizedErrors = sanitizeZodError(result.error);
@@ -48,6 +48,7 @@ export function createValidationMiddleware(logger: Logger, limits: LimitsConfig)
         return;
       }
 
+      // Use normalized payload (sessionId canonicalized to context.sessionId)
       req.body = result.data;
       
       logger.debug(

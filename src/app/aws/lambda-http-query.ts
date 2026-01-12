@@ -63,24 +63,33 @@ function createSuccessResponse(result: {
   };
 }
 
-function createErrorResponse(error: unknown, statusCode: number = 500): APIGatewayProxyResult {
+function createErrorResponse(error: unknown, statusCode: number = 500, requestId?: string): APIGatewayProxyResult {
   const message = error instanceof Error ? error.message : 'Internal server error';
   const code = statusCode === 400 ? 'VALIDATION_ERROR'
     : statusCode === 401 ? 'AUTHENTICATION_ERROR'
     : statusCode === 404 ? 'NOT_FOUND'
     : 'INTERNAL_SERVER_ERROR';
 
+  const body: {
+    error: { code: string; message: string };
+    requestId?: string;
+  } = {
+    error: {
+      code,
+      message,
+    },
+  };
+
+  if (requestId) {
+    body.requestId = requestId;
+  }
+
   return {
     statusCode,
     headers: {
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({
-      error: {
-        code,
-        message,
-      },
-    }),
+    body: JSON.stringify(body),
   };
 }
 
@@ -98,16 +107,16 @@ export function createLambdaQueryHandler(deps: LambdaQueryDependencies) {
       // Handle Zod validation errors (same as Express)
       if (error instanceof Error && isZodError(error)) {
         const validationError = sanitizeZodError(error);
-        return createErrorResponse(validationError, 400);
+        return createErrorResponse(validationError, 400, requestId);
       }
 
       // Handle invalid cursor errors as validation errors
       if (error instanceof Error && error.message.includes('Invalid')) {
-        return createErrorResponse(error, 400);
+        return createErrorResponse(error, 400, requestId);
       }
 
       // All other errors are internal server errors
-      return createErrorResponse(error, 500);
+      return createErrorResponse(error, 500, requestId);
     }
   };
 }
