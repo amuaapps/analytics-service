@@ -247,35 +247,35 @@ jobs:
 
       - name: Create deployment package (prod dependencies only)
         run: |
-          mkdir -p dist/deployment
-          cp -r dist/* dist/deployment/
-          cp package.json package-lock.json dist/deployment/
-          cd dist/deployment
+          mkdir -p deployment
+          cp -r dist/* deployment/
+          cp package.json package-lock.json deployment/
+          cd deployment
           npm ci --production --ignore-scripts
           cd ../..
           
       - name: Package for AWS Lambda
         if: needs.detect-cloud.outputs.cloud == 'aws'
         run: |
-          cd dist/deployment
+          cd deployment
           zip -r ../lambda-deployment.zip .
-          cd ../..
+          cd ..
           
       - name: Package for Azure Functions
         if: needs.detect-cloud.outputs.cloud == 'azure'
         run: |
           # Copy host.json to deployment folder for Azure Functions routing
-          cp host.json dist/deployment/
-          cd dist/deployment
+          cp host.json deployment/
+          cd deployment
           zip -r ../function-deployment.zip .
-          cd ../..
+          cd ..
 
       - name: Upload deployment artifact
         uses: actions/upload-artifact@v4
         with:
           name: deployment-package-${{ needs.detect-cloud.outputs.cloud }}
           path: |
-            dist/*.zip
+            *.zip
           retention-days: 30
 
   # Stage 3: Deploy GREEN (AWS)
@@ -405,19 +405,19 @@ jobs:
           # Update Lambda function code (region from AWS credentials config)
           aws lambda update-function-code \
             --function-name ${PROJECT_NAME}-ingest-${ENVIRONMENT} \
-            --zip-file fileb://dist/lambda-deployment.zip \
+            --zip-file fileb://lambda-deployment.zip \
             --region ${AWS_REGION} \
             --publish > /tmp/ingest-version.json
           
           aws lambda update-function-code \
             --function-name ${PROJECT_NAME}-query-${ENVIRONMENT} \
-            --zip-file fileb://dist/lambda-deployment.zip \
+            --zip-file fileb://lambda-deployment.zip \
             --region ${AWS_REGION} \
             --publish > /tmp/query-version.json
           
           aws lambda update-function-code \
             --function-name ${PROJECT_NAME}-processor-${ENVIRONMENT} \
-            --zip-file fileb://dist/lambda-deployment.zip \
+            --zip-file fileb://lambda-deployment.zip \
             --region ${AWS_REGION} \
             --publish > /tmp/processor-version.json
           
@@ -536,7 +536,7 @@ jobs:
           az functionapp deployment source config-zip \
             --resource-group analytics-service-${{ needs.setup.outputs.environment }}-rg \
             --name $FUNCTION_APP \
-            --src dist/function-deployment.zip \
+            --src function-deployment.zip \
             --slot staging
           
           # Get staging URL

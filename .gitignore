@@ -7,6 +7,8 @@ yarn.lock
 dist/
 build/
 *.tsbuildinfo
+deployment/
+*.zip
 
 # Test coverage
 coverage/
