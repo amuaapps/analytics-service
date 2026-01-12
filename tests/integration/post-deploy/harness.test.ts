@@ -3,13 +3,13 @@ import type { IngestRequestEnvelope } from '../../../src/domain/ingest-types.js'
 
 /**
  * Post-deployment integration test harness
- * 
+ *
  * This test validates the end-to-end flow:
  * 1. Ingest event via POST /api/v1/events
  * 2. Wait for event to be processed and stored
  * 3. Query event via GET /api/v1/events
  * 4. Assert returned data matches contract
- * 
+ *
  * Used in Stage 4 of CI/CD to validate GREEN deployment before traffic switch.
  */
 
@@ -85,7 +85,7 @@ async function fetchWithTimeout(
  */
 async function ingestEvent(eventId: string): Promise<IngestResponse> {
   const now = new Date().toISOString();
-  
+
   const payload: IngestRequestEnvelope = {
     schemaVersion: '1.0.0',
     events: [
@@ -130,9 +130,7 @@ async function ingestEvent(eventId: string): Promise<IngestResponse> {
 
   if (!response.ok) {
     const errorText = await response.text();
-    throw new Error(
-      `Ingest failed: ${response.status} ${response.statusText}\n${errorText}`
-    );
+    throw new Error(`Ingest failed: ${response.status} ${response.statusText}\n${errorText}`);
   }
 
   return response.json() as Promise<IngestResponse>;
@@ -159,7 +157,7 @@ async function queryEventWithRetry(
       });
 
       const response = await fetchWithTimeout(
-        `${API_BASE_URL}/api/v1/events?${queryParams}`,
+        `${API_BASE_URL}/api/v1/events?${queryParams.toString()}`,
         {
           method: 'GET',
           headers: {
@@ -170,15 +168,13 @@ async function queryEventWithRetry(
       );
 
       if (!response.ok) {
-        console.warn(
-          `Query attempt ${attempt}/${maxRetries} failed: ${response.status}`
-        );
-        
+        console.warn(`Query attempt ${attempt}/${maxRetries} failed: ${response.status}`);
+
         if (attempt < maxRetries) {
           await new Promise((resolve) => setTimeout(resolve, delayMs));
           continue;
         }
-        
+
         const errorText = await response.text();
         throw new Error(
           `Query failed after ${maxRetries} attempts: ${response.status} ${response.statusText}\n${errorText}`
@@ -189,7 +185,7 @@ async function queryEventWithRetry(
 
       // Check if our event is in the results
       const foundEvent = data.items.find((e) => e.eventId === eventId);
-      
+
       if (foundEvent) {
         return data;
       }
@@ -216,10 +212,7 @@ async function queryEventWithRetry(
 /**
  * Validate event matches contract
  */
-function validateEvent(
-  event: QueryResponse['items'][0],
-  expectedEventId: string
-): void {
+function validateEvent(event: QueryResponse['items'][0], expectedEventId: string): void {
   // Required fields
   expect(event.eventId).toBe(expectedEventId);
   expect(event.type).toBe('track');
@@ -273,42 +266,36 @@ describe('Post-Deploy Integration Test Harness', () => {
 
   it('should complete end-to-end flow: ingest → persist → query', async () => {
     console.log('\n[1/3] Ingesting test event...');
-    
+
     // Step 1: Ingest event
     const ingestResponse = await ingestEvent(TEST_EVENT_ID);
-    
+
     expect(ingestResponse).toBeDefined();
     expect(ingestResponse.accepted).toBe(true);
     expect(ingestResponse.eventCount).toBe(1);
     expect(ingestResponse.batchId).toBeDefined();
-    
+
     console.log(`✓ Event ingested successfully (batchId: ${ingestResponse.batchId})`);
 
     console.log('\n[2/3] Waiting for event to be processed and queryable...');
-    
+
     // Step 2: Wait for event to be queryable
-    const queryResponse = await queryEventWithRetry(
-      TEST_EVENT_ID,
-      MAX_RETRIES,
-      RETRY_DELAY_MS
-    );
+    const queryResponse = await queryEventWithRetry(TEST_EVENT_ID, MAX_RETRIES, RETRY_DELAY_MS);
 
     expect(queryResponse).not.toBeNull();
     expect(queryResponse!.items).toBeDefined();
     expect(queryResponse!.items.length).toBeGreaterThan(0);
-    
+
     console.log(`✓ Event is queryable (found ${queryResponse!.items.length} events)`);
 
     console.log('\n[3/3] Validating event data matches contract...');
-    
+
     // Step 3: Validate event
-    const foundEvent = queryResponse!.items.find(
-      (e) => e.eventId === TEST_EVENT_ID
-    );
-    
+    const foundEvent = queryResponse!.items.find((e) => e.eventId === TEST_EVENT_ID);
+
     expect(foundEvent).toBeDefined();
     validateEvent(foundEvent!, TEST_EVENT_ID);
-    
+
     console.log('✓ Event data validated successfully');
     console.log('\n' + '='.repeat(60));
     console.log('✅ POST-DEPLOY INTEGRATION TEST PASSED');
@@ -317,7 +304,7 @@ describe('Post-Deploy Integration Test Harness', () => {
 
   it('should handle query pagination correctly', async () => {
     console.log('\n[Pagination Test] Querying with limit...');
-    
+
     const fromTime = new Date(Date.now() - 60000).toISOString();
     const queryParams = new URLSearchParams({
       appId: TEST_APP_ID,
@@ -326,7 +313,7 @@ describe('Post-Deploy Integration Test Harness', () => {
     });
 
     const response = await fetchWithTimeout(
-      `${API_BASE_URL}/api/v1/events?${queryParams}`,
+      `${API_BASE_URL}/api/v1/events?${queryParams.toString()}`,
       {
         method: 'GET',
         headers: {
@@ -337,23 +324,23 @@ describe('Post-Deploy Integration Test Harness', () => {
     );
 
     expect(response.ok).toBe(true);
-    
+
     const data = (await response.json()) as QueryResponse;
-    
+
     expect(data.items).toBeDefined();
     expect(Array.isArray(data.items)).toBe(true);
-    
+
     if (data.nextCursor) {
       expect(typeof data.nextCursor).toBe('string');
       expect(data.nextCursor.length).toBeGreaterThan(0);
     }
-    
+
     console.log(`✓ Pagination validated (nextCursor: ${data.nextCursor ? 'present' : 'none'})`);
   }, 30000);
 
   it('should reject requests without authentication', async () => {
     console.log('\n[Auth Test] Testing authentication requirement...');
-    
+
     const payload: IngestRequestEnvelope = {
       schemaVersion: '1.0.0',
       events: [
@@ -394,7 +381,7 @@ describe('Post-Deploy Integration Test Harness', () => {
 
   it('should reject invalid payloads', async () => {
     console.log('\n[Validation Test] Testing payload validation...');
-    
+
     const invalidPayload = {
       schemaVersion: '1.0.0',
       events: [
