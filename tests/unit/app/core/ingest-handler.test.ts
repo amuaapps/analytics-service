@@ -70,7 +70,7 @@ describe('Core Ingest Handler', () => {
           requestId: 'req-123',
           batchId: expect.any(String),
           storageLocation: 'test-location',
-          events: request.payload.events,
+          receivedAt: expect.any(String),
         })
       );
     });
@@ -145,13 +145,13 @@ describe('Core Ingest Handler', () => {
       const result1 = await handleIngest(request, {
         logger,
         queueAdapter: mockQueueAdapter,
-        rawStorage: {} as any,
+        rawStorage: mockRawStorage,
       });
 
       const result2 = await handleIngest(request, {
         logger,
         queueAdapter: mockQueueAdapter,
-        rawStorage: {} as any,
+        rawStorage: mockRawStorage,
       });
 
       expect(result1.batchId).not.toBe(result2.batchId);
@@ -182,7 +182,7 @@ describe('Core Ingest Handler', () => {
         handleIngest(request, {
           logger,
           queueAdapter: mockQueueAdapter,
-          rawStorage: {} as any,
+          rawStorage: mockRawStorage,
         })
       ).rejects.toThrow('Queue error');
     });
@@ -218,7 +218,7 @@ describe('Core Ingest Handler', () => {
       await handleIngest(request, {
         logger,
         queueAdapter: mockQueueAdapter,
-        rawStorage: {} as any,
+        rawStorage: mockRawStorage,
       });
 
       const enqueuedMessage = mockQueueAdapter.enqueue.mock.calls[0][0];

@@ -156,6 +156,7 @@ describe('POST /api/v1/events - Integration', () => {
       expect(response.body).toEqual({
         accepted: true,
         eventCount: 3,
+        batchId: expect.any(String),
       });
 
       expect(queueAdapter.size()).toBe(1);
@@ -247,8 +248,11 @@ describe('POST /api/v1/events - Integration', () => {
       const response = await request(app).post('/api/v1/events').send(payload).expect(401);
 
       expect(response.body).toEqual({
-        error: 'Unauthorized',
-        message: 'Missing X-Analytics-Write-Key header',
+        error: {
+          code: 'AUTHENTICATION_ERROR',
+          message: 'Missing or invalid write key',
+        },
+        requestId: expect.any(String),
       });
 
       expect(queueAdapter.size()).toBe(0);
@@ -315,7 +319,7 @@ describe('POST /api/v1/events - Integration', () => {
     });
 
     it('should reject batch exceeding max events', async () => {
-      const events = Array.from({ length: 51 }, (_, i) => ({
+      const events = Array.from({ length: 101 }, (_, i) => ({
         schemaVersion: SCHEMA_VERSION,
         eventId: `550e8400-e29b-41d4-a716-44665544${String(i).padStart(4, '0')}`,
         type: 'track' as const,

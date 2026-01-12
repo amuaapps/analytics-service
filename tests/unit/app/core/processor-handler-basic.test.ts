@@ -88,7 +88,10 @@ describe('Processor Handler - Basic Functionality', () => {
 
     expect(result.processed).toBe(1);
     expect(result.failed).toBe(0);
-    expect(mockRawStorage.getRawBatch).toHaveBeenCalledWith('s3://bucket/key');
+    expect(mockRawStorage.getRawBatch).toHaveBeenCalledWith({
+      batchId: 'batch-456',
+      storageLocation: 's3://bucket/key',
+    });
     expect(mockOperationalStorage.storeEvents).toHaveBeenCalledTimes(1);
   });
 
