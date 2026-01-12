@@ -28,7 +28,9 @@ describe('DynamoDBEventRepository - Query Logic', () => {
       send: jest.fn(),
     } as unknown as jest.Mocked<DynamoDBClient>;
 
-    (DynamoDBClient as jest.MockedClass<typeof DynamoDBClient>).mockImplementation(() => mockClient);
+    (DynamoDBClient as jest.MockedClass<typeof DynamoDBClient>).mockImplementation(
+      () => mockClient
+    );
     (marshall as jest.Mock).mockImplementation((obj) => obj as any);
 
     repository = new DynamoDBEventRepository({
@@ -76,7 +78,7 @@ describe('DynamoDBEventRepository - Query Logic', () => {
       expect(call.input.IndexName).toBeUndefined();
     });
 
-    it('should make "to" exclusive by subtracting 1ms when using BETWEEN', async () => {
+    it('should use key-bound strategy for time range with composite SK (occurredAt#eventId)', async () => {
       mockClient.send.mockResolvedValueOnce({ Items: [] });
 
       const input: QueryEventsInput = {
@@ -89,9 +91,12 @@ describe('DynamoDBEventRepository - Query Logic', () => {
 
       const call = (mockClient.send as jest.Mock).mock.calls[0][0];
       const marshalledValues = call.input.ExpressionAttributeValues;
-      
-      // The 'to' value should be 1ms before the original
-      expect(marshalledValues[':to']).toBe('2026-01-01T23:59:59.999Z');
+
+      // Key-bound strategy: append '#' to timestamps
+      // Lower bound: 'from#' is inclusive (includes all events at from)
+      // Upper bound: 'to#' is exclusive (excludes all events at to)
+      expect(marshalledValues[':from']).toBe('2026-01-01T00:00:00.000Z#');
+      expect(marshalledValues[':to']).toBe('2026-01-02T00:00:00.000Z#');
     });
 
     it('should use < operator for exclusive "to" when only "to" is provided', async () => {
@@ -157,7 +162,9 @@ describe('DynamoDBEventRepository - Query Logic', () => {
 
       const call = (mockClient.send as jest.Mock).mock.calls[0][0];
       expect(call.input.IndexName).toBe('GSI1');
-      expect(call.input.KeyConditionExpression).toBe('GSI1PK = :compositeKey AND GSI1SK BETWEEN :from AND :to');
+      expect(call.input.KeyConditionExpression).toBe(
+        'GSI1PK = :compositeKey AND GSI1SK BETWEEN :from AND :to'
+      );
     });
   });
 
@@ -208,7 +215,9 @@ describe('DynamoDBEventRepository - Query Logic', () => {
 
       const call = (mockClient.send as jest.Mock).mock.calls[0][0];
       expect(call.input.IndexName).toBe('GSI2');
-      expect(call.input.KeyConditionExpression).toBe('GSI2PK = :compositeKey AND GSI2SK BETWEEN :from AND :to');
+      expect(call.input.KeyConditionExpression).toBe(
+        'GSI2PK = :compositeKey AND GSI2SK BETWEEN :from AND :to'
+      );
     });
   });
 
@@ -318,7 +327,9 @@ describe('DynamoDBEventRepository - Query Logic', () => {
       mockClient.send.mockResolvedValueOnce({ Items: [] });
 
       // New cursor format: uses table PK (appId) only
-      const mockCursor = Buffer.from(JSON.stringify({ pk: 'test-app', sk: '2026-01-01T00:00:00.000Z#event-1' })).toString('base64');
+      const mockCursor = Buffer.from(
+        JSON.stringify({ pk: 'test-app', sk: '2026-01-01T00:00:00.000Z#event-1' })
+      ).toString('base64');
 
       const input: QueryEventsInput = {
         appId: 'test-app',
@@ -345,7 +356,9 @@ describe('DynamoDBEventRepository - Query Logic', () => {
       mockClient.send.mockResolvedValueOnce({ Items: [] });
 
       // Old cursor format: contains composite key
-      const mockCursor = Buffer.from(JSON.stringify({ pk: 'test-app#user-123', sk: '2026-01-01T00:00:00.000Z#event-1' })).toString('base64');
+      const mockCursor = Buffer.from(
+        JSON.stringify({ pk: 'test-app#user-123', sk: '2026-01-01T00:00:00.000Z#event-1' })
+      ).toString('base64');
 
       const input: QueryEventsInput = {
         appId: 'test-app',
@@ -505,7 +518,7 @@ describe('DynamoDBEventRepository - Query Logic', () => {
   });
 
   describe('Time Range Edge Cases', () => {
-    it('should handle only "from" parameter', async () => {
+    it('should handle only "from" parameter with key-bound strategy', async () => {
       mockClient.send.mockResolvedValueOnce({ Items: [] });
 
       const input: QueryEventsInput = {
@@ -517,9 +530,10 @@ describe('DynamoDBEventRepository - Query Logic', () => {
 
       const call = (mockClient.send as jest.Mock).mock.calls[0][0];
       expect(call.input.KeyConditionExpression).toBe('PK = :appId AND SK >= :from');
+      expect(call.input.ExpressionAttributeValues[':from']).toBe('2026-01-01T00:00:00.000Z#');
     });
 
-    it('should handle only "to" parameter with exclusive semantics', async () => {
+    it('should handle only "to" parameter with exclusive key-bound', async () => {
       mockClient.send.mockResolvedValueOnce({ Items: [] });
 
       const input = {
@@ -532,6 +546,7 @@ describe('DynamoDBEventRepository - Query Logic', () => {
 
       const call = (mockClient.send as jest.Mock).mock.calls[0][0];
       expect(call.input.KeyConditionExpression).toContain('BETWEEN');
+      expect(call.input.ExpressionAttributeValues[':to']).toBe('2026-01-02T00:00:00.000Z#');
     });
 
     it('should handle neither "from" nor "to" parameters', async () => {
@@ -545,7 +560,313 @@ describe('DynamoDBEventRepository - Query Logic', () => {
       await repository.queryEvents(input);
 
       const call = (mockClient.send as jest.Mock).mock.calls[0][0];
-      expect(call.input.KeyConditionExpression).toBe('PK = :appId AND SK >= :from');
+      const toBound = call.input.ExpressionAttributeValues[':to'];
+
+      // Upper bound 'to#' excludes all events at to
+      // '2026-01-02T00:00:00.000Z#evt-123' > '2026-01-02T00:00:00.000Z#'
+      expect(toBound).toBe('2026-01-02T00:00:00.000Z#');
+      expect(call.input.KeyConditionExpression).toContain('BETWEEN');
+    });
+
+    it('should include events before "to" timestamp (to - epsilon)', async () => {
+      mockClient.send.mockResolvedValueOnce({ Items: [] });
+
+      const input: QueryEventsInput = {
+        appId: 'test-app',
+        from: '2026-01-01T00:00:00.000Z',
+        to: '2026-01-02T00:00:00.000Z',
+      };
+
+      await repository.queryEvents(input);
+
+      const call = (mockClient.send as jest.Mock).mock.calls[0][0];
+      const toBound = call.input.ExpressionAttributeValues[':to'];
+
+      // Events before 'to' are included
+      // '2026-01-01T23:59:59.999Z#evt-123' < '2026-01-02T00:00:00.000Z#'
+      expect(toBound).toBe('2026-01-02T00:00:00.000Z#');
+
+      // Verify BETWEEN semantics
+      expect(call.input.KeyConditionExpression).toBe('PK = :appId AND SK BETWEEN :from AND :to');
+    });
+
+    it('should use correct bounds for single-sided ranges', async () => {
+      // Test only 'from' parameter
+      mockClient.send.mockResolvedValueOnce({ Items: [] });
+
+      const inputFrom: QueryEventsInput = {
+        appId: 'test-app',
+        from: '2026-01-01T00:00:00.000Z',
+      };
+
+      await repository.queryEvents(inputFrom);
+
+      const callFrom = (mockClient.send as jest.Mock).mock.calls[0][0];
+      expect(callFrom.input.ExpressionAttributeValues[':from']).toBe('2026-01-01T00:00:00.000Z#');
+      expect(callFrom.input.KeyConditionExpression).toContain('>= :from');
+    });
+  });
+
+  describe('FilterExpression - Types Filtering', () => {
+    it('should filter by single event type using FilterExpression', async () => {
+      mockClient.send.mockResolvedValueOnce({ Items: [] });
+
+      const input: QueryEventsInput = {
+        appId: 'test-app',
+        from: '2026-01-01T00:00:00.000Z',
+        types: ['track'],
+      };
+
+      await repository.queryEvents(input);
+
+      const call = (mockClient.send as jest.Mock).mock.calls[0][0];
+      expect(call.input.FilterExpression).toBe('#type IN (:type0)');
+      expect(call.input.ExpressionAttributeNames).toEqual({ '#type': 'type' });
+      expect(call.input.ExpressionAttributeValues[':type0']).toBe('track');
+    });
+
+    it('should filter by multiple event types using IN operator', async () => {
+      mockClient.send.mockResolvedValueOnce({ Items: [] });
+
+      const input: QueryEventsInput = {
+        appId: 'test-app',
+        from: '2026-01-01T00:00:00.000Z',
+        types: ['track', 'page', 'identify'],
+      };
+
+      await repository.queryEvents(input);
+
+      const call = (mockClient.send as jest.Mock).mock.calls[0][0];
+      expect(call.input.FilterExpression).toBe('#type IN (:type0, :type1, :type2)');
+      expect(call.input.ExpressionAttributeNames).toEqual({ '#type': 'type' });
+      expect(call.input.ExpressionAttributeValues[':type0']).toBe('track');
+      expect(call.input.ExpressionAttributeValues[':type1']).toBe('page');
+      expect(call.input.ExpressionAttributeValues[':type2']).toBe('identify');
+    });
+
+    it('should not add FilterExpression when types array is empty', async () => {
+      mockClient.send.mockResolvedValueOnce({ Items: [] });
+
+      const input: QueryEventsInput = {
+        appId: 'test-app',
+        from: '2026-01-01T00:00:00.000Z',
+        types: [],
+      };
+
+      await repository.queryEvents(input);
+
+      const call = (mockClient.send as jest.Mock).mock.calls[0][0];
+      expect(call.input.FilterExpression).toBeUndefined();
+      expect(call.input.ExpressionAttributeNames).toBeUndefined();
+    });
+
+    it('should use expression attribute names for reserved keyword "type"', async () => {
+      mockClient.send.mockResolvedValueOnce({ Items: [] });
+
+      const input: QueryEventsInput = {
+        appId: 'test-app',
+        from: '2026-01-01T00:00:00.000Z',
+        types: ['track'],
+      };
+
+      await repository.queryEvents(input);
+
+      const call = (mockClient.send as jest.Mock).mock.calls[0][0];
+      // Verify we use #type placeholder, not raw 'type'
+      expect(call.input.FilterExpression).toContain('#type');
+      expect(call.input.FilterExpression).not.toContain('type IN');
+      expect(call.input.ExpressionAttributeNames['#type']).toBe('type');
+    });
+  });
+
+  describe('FilterExpression - Names Filtering', () => {
+    it('should filter by single event name using FilterExpression', async () => {
+      mockClient.send.mockResolvedValueOnce({ Items: [] });
+
+      const input: QueryEventsInput = {
+        appId: 'test-app',
+        from: '2026-01-01T00:00:00.000Z',
+        names: ['Button Clicked'],
+      };
+
+      await repository.queryEvents(input);
+
+      const call = (mockClient.send as jest.Mock).mock.calls[0][0];
+      expect(call.input.FilterExpression).toBe('#name IN (:name0)');
+      expect(call.input.ExpressionAttributeNames).toEqual({ '#name': 'name' });
+      expect(call.input.ExpressionAttributeValues[':name0']).toBe('Button Clicked');
+    });
+
+    it('should filter by multiple event names using IN operator', async () => {
+      mockClient.send.mockResolvedValueOnce({ Items: [] });
+
+      const input: QueryEventsInput = {
+        appId: 'test-app',
+        from: '2026-01-01T00:00:00.000Z',
+        names: ['Button Clicked', 'Page Viewed', 'Form Submitted'],
+      };
+
+      await repository.queryEvents(input);
+
+      const call = (mockClient.send as jest.Mock).mock.calls[0][0];
+      expect(call.input.FilterExpression).toBe('#name IN (:name0, :name1, :name2)');
+      expect(call.input.ExpressionAttributeNames).toEqual({ '#name': 'name' });
+      expect(call.input.ExpressionAttributeValues[':name0']).toBe('Button Clicked');
+      expect(call.input.ExpressionAttributeValues[':name1']).toBe('Page Viewed');
+      expect(call.input.ExpressionAttributeValues[':name2']).toBe('Form Submitted');
+    });
+
+    it('should not add FilterExpression when names array is empty', async () => {
+      mockClient.send.mockResolvedValueOnce({ Items: [] });
+
+      const input: QueryEventsInput = {
+        appId: 'test-app',
+        from: '2026-01-01T00:00:00.000Z',
+        names: [],
+      };
+
+      await repository.queryEvents(input);
+
+      const call = (mockClient.send as jest.Mock).mock.calls[0][0];
+      expect(call.input.FilterExpression).toBeUndefined();
+      expect(call.input.ExpressionAttributeNames).toBeUndefined();
+    });
+
+    it('should use expression attribute names for reserved keyword "name"', async () => {
+      mockClient.send.mockResolvedValueOnce({ Items: [] });
+
+      const input: QueryEventsInput = {
+        appId: 'test-app',
+        from: '2026-01-01T00:00:00.000Z',
+        names: ['Button Clicked'],
+      };
+
+      await repository.queryEvents(input);
+
+      const call = (mockClient.send as jest.Mock).mock.calls[0][0];
+      // Verify we use #name placeholder, not raw 'name'
+      expect(call.input.FilterExpression).toContain('#name');
+      expect(call.input.FilterExpression).not.toContain('name IN');
+      expect(call.input.ExpressionAttributeNames['#name']).toBe('name');
+    });
+  });
+
+  describe('FilterExpression - Combined Filters', () => {
+    it('should combine types and names filters with AND', async () => {
+      mockClient.send.mockResolvedValueOnce({ Items: [] });
+
+      const input: QueryEventsInput = {
+        appId: 'test-app',
+        from: '2026-01-01T00:00:00.000Z',
+        types: ['track', 'page'],
+        names: ['Button Clicked', 'Page Viewed'],
+      };
+
+      await repository.queryEvents(input);
+
+      const call = (mockClient.send as jest.Mock).mock.calls[0][0];
+      expect(call.input.FilterExpression).toBe(
+        '#type IN (:type0, :type1) AND #name IN (:name0, :name1)'
+      );
+      expect(call.input.ExpressionAttributeNames).toEqual({
+        '#type': 'type',
+        '#name': 'name',
+      });
+      expect(call.input.ExpressionAttributeValues[':type0']).toBe('track');
+      expect(call.input.ExpressionAttributeValues[':type1']).toBe('page');
+      expect(call.input.ExpressionAttributeValues[':name0']).toBe('Button Clicked');
+      expect(call.input.ExpressionAttributeValues[':name1']).toBe('Page Viewed');
+    });
+
+    it('should combine anonymousId, types, and names filters', async () => {
+      mockClient.send.mockResolvedValueOnce({ Items: [] });
+
+      const input: QueryEventsInput = {
+        appId: 'test-app',
+        from: '2026-01-01T00:00:00.000Z',
+        anonymousId: 'anon-123',
+        types: ['track'],
+        names: ['Button Clicked'],
+      };
+
+      await repository.queryEvents(input);
+
+      const call = (mockClient.send as jest.Mock).mock.calls[0][0];
+      expect(call.input.FilterExpression).toBe(
+        'actor.anonymousId = :anonymousId AND #type IN (:type0) AND #name IN (:name0)'
+      );
+      expect(call.input.ExpressionAttributeNames).toEqual({
+        '#type': 'type',
+        '#name': 'name',
+      });
+      expect(call.input.ExpressionAttributeValues[':anonymousId']).toBe('anon-123');
+      expect(call.input.ExpressionAttributeValues[':type0']).toBe('track');
+      expect(call.input.ExpressionAttributeValues[':name0']).toBe('Button Clicked');
+    });
+
+    it('should work with userId query and types filter', async () => {
+      mockClient.send.mockResolvedValueOnce({ Items: [] });
+
+      const input: QueryEventsInput = {
+        appId: 'test-app',
+        userId: 'user-123',
+        from: '2026-01-01T00:00:00.000Z',
+        types: ['track', 'page'],
+      };
+
+      await repository.queryEvents(input);
+
+      const call = (mockClient.send as jest.Mock).mock.calls[0][0];
+      expect(call.input.IndexName).toBe('GSI1');
+      expect(call.input.KeyConditionExpression).toBe('GSI1PK = :compositeKey AND GSI1SK >= :from');
+      expect(call.input.FilterExpression).toBe('#type IN (:type0, :type1)');
+      expect(call.input.ExpressionAttributeNames).toEqual({ '#type': 'type' });
+    });
+
+    it('should work with sessionId query and names filter', async () => {
+      mockClient.send.mockResolvedValueOnce({ Items: [] });
+
+      const input: QueryEventsInput = {
+        appId: 'test-app',
+        sessionId: 'session-456',
+        from: '2026-01-01T00:00:00.000Z',
+        names: ['Page Viewed'],
+      };
+
+      await repository.queryEvents(input);
+
+      const call = (mockClient.send as jest.Mock).mock.calls[0][0];
+      expect(call.input.IndexName).toBe('GSI2');
+      expect(call.input.KeyConditionExpression).toBe('GSI2PK = :compositeKey AND GSI2SK >= :from');
+      expect(call.input.FilterExpression).toBe('#name IN (:name0)');
+      expect(call.input.ExpressionAttributeNames).toEqual({ '#name': 'name' });
+    });
+
+    it('should handle all filters together', async () => {
+      mockClient.send.mockResolvedValueOnce({ Items: [] });
+
+      const input: QueryEventsInput = {
+        appId: 'test-app',
+        userId: 'user-123',
+        anonymousId: 'anon-456',
+        from: '2026-01-01T00:00:00.000Z',
+        to: '2026-01-02T00:00:00.000Z',
+        types: ['track'],
+        names: ['Button Clicked'],
+      };
+
+      await repository.queryEvents(input);
+
+      const call = (mockClient.send as jest.Mock).mock.calls[0][0];
+      expect(call.input.IndexName).toBe('GSI1');
+      expect(call.input.KeyConditionExpression).toContain('GSI1PK = :compositeKey');
+      expect(call.input.FilterExpression).toBe(
+        'actor.anonymousId = :anonymousId AND #type IN (:type0) AND #name IN (:name0)'
+      );
+      expect(call.input.ExpressionAttributeNames).toEqual({
+        '#type': 'type',
+        '#name': 'name',
+      });
     });
   });
 });

@@ -29,14 +29,49 @@ The infrastructure supports blue/green deployments using **deployment slots**:
 
 ## Deployment
 
-### 1. Login to Azure
+### Automated Deployment (Recommended)
+
+**The GitHub Actions workflow automatically generates parameter files from GitHub variables.**
+
+No manual parameter file creation needed! Just configure GitHub secrets and variables:
+
+#### Required GitHub Secrets
+- `ANALYTICS_WRITE_KEY` - API authentication key
+
+#### Required GitHub Variables
+- `AZURE_CLIENT_ID` - Service principal client ID (for OIDC)
+- `AZURE_TENANT_ID` - Azure tenant ID
+- `AZURE_SUBSCRIPTION_ID` - Azure subscription ID
+
+#### Optional GitHub Variables (with defaults)
+- `AZURE_LOCATION` - Azure region (default: `eastus`)
+- `AZURE_PROJECT_NAME` - Project name (default: `analytics-service`)
+- `CORS_ALLOWED_ORIGINS` - CORS origins (default: `*`)
+- `LOG_LEVEL` - Logging level (default: `debug` for dev/staging, `info` for prod)
+- `AZURE_COSMOS_THROUGHPUT` - Cosmos DB RU/s (default: `400`)
+- `AZURE_COSMOS_AUTOSCALE` - Enable autoscale (default: `true`)
+- `EVENT_RETENTION_DAYS` - Operational storage TTL (default: `90`)
+- `RAW_EVENT_RETENTION_DAYS` - Raw storage retention (default: `365`)
+- `AZURE_FUNCTION_SKU` - Function App SKU (default: `Y1`)
+
+**The workflow generates `parameters.json` dynamically from these variables.**
+
+See `.github/workflows/deploy.yml` for the parameter generation logic.
+
+---
+
+### Manual Deployment
+
+For local testing or manual deployments:
+
+#### 1. Login to Azure
 
 ```bash
 az login
 az account set --subscription "your-subscription-id"
 ```
 
-### 2. Create Resource Group
+#### 2. Create Resource Group
 
 ```bash
 az group create \
@@ -44,51 +79,66 @@ az group create \
   --location eastus
 ```
 
-### 3. Create Parameters File
+#### 3. Deploy with Inline Parameters
 
-Create `parameters.dev.json`:
+**Option A: Inline parameters (recommended for manual deployment)**
+
+```bash
+az deployment group create \
+  --resource-group analytics-service-dev-rg \
+  --template-file main.bicep \
+  --parameters \
+    environment=dev \
+    location=eastus \
+    projectName=analytics-service \
+    analyticsWriteKey="your-secret-key" \
+    corsAllowedOrigins="*" \
+    logLevel=debug \
+    cosmosDbThroughput=400 \
+    cosmosDbAutoscale=true \
+    eventRetentionDays=90 \
+    rawEventRetentionDays=365 \
+    functionAppSku=Y1 \
+  --name analytics-deployment-$(date +%Y%m%d-%H%M%S)
+```
+
+**Option B: Create a local parameters file**
+
+Create `parameters.local.json` (not committed to Git):
 
 ```json
 {
   "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
   "contentVersion": "1.0.0.0",
   "parameters": {
-    "environment": {
-      "value": "dev"
-    },
-    "location": {
-      "value": "eastus"
-    },
-    "projectName": {
-      "value": "analytics-service"
-    },
-    "analyticsWriteKey": {
-      "value": "your-secret-write-key"
-    }
+    "environment": { "value": "dev" },
+    "location": { "value": "eastus" },
+    "projectName": { "value": "analytics-service" },
+    "analyticsWriteKey": { "value": "your-secret-write-key" },
+    "corsAllowedOrigins": { "value": "*" },
+    "logLevel": { "value": "debug" },
+    "cosmosDbThroughput": { "value": 400 },
+    "cosmosDbAutoscale": { "value": true },
+    "eventRetentionDays": { "value": 90 },
+    "rawEventRetentionDays": { "value": 365 },
+    "functionAppSku": { "value": "Y1" }
   }
 }
 ```
 
-### 4. Validate Template
-
-```bash
-az deployment group validate \
-  --resource-group analytics-service-dev-rg \
-  --template-file main.bicep \
-  --parameters parameters.dev.json
-```
-
-### 5. Deploy
+Then deploy:
 
 ```bash
 az deployment group create \
   --resource-group analytics-service-dev-rg \
   --template-file main.bicep \
-  --parameters parameters.dev.json \
+  --parameters parameters.local.json \
   --name analytics-deployment-$(date +%Y%m%d-%H%M%S)
 ```
 
-### 6. Get Outputs
+**Note:** The `parameters.dev.json` file in this directory is a **reference example only**. The GitHub Actions workflow does not use it.
+
+#### 4. Get Outputs
 
 ```bash
 az deployment group show \

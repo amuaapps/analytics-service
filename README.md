@@ -350,10 +350,24 @@ The service includes a complete local development environment with in-memory imp
 # Install dependencies
 npm install
 
+# This automatically sets up Git hooks via Husky
+# The prepare script runs after npm install
+
 # Copy environment template
 cp .env.example .env
 
 # Edit .env with your local settings (optional)
+```
+
+**Git Hooks:**
+The project uses Husky to enforce code quality via pre-commit hooks:
+- **Automatic setup**: Hooks are installed automatically when you run `npm install`
+- **Pre-commit checks**: Runs `lint-staged` to format and lint staged files
+- **What runs**: ESLint (with auto-fix) + Prettier (formatting) on `.ts` files
+
+If hooks aren't working, manually reinstall:
+```bash
+npm run prepare
 ```
 
 ### Development Server

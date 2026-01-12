@@ -196,7 +196,8 @@ jobs:
   codeql:
     name: Stage 1 - CodeQL Analysis
     runs-on: ubuntu-latest
-    needs: setup
+    # Run on all events (PRs, push, workflow_dispatch)
+    # No dependency on setup - static analysis doesn't need environment detection
     permissions:
       security-events: write
       actions: read
@@ -260,6 +261,8 @@ jobs:
       - name: Package for Azure Functions
         if: needs.setup.outputs.cloud == 'azure'
         run: |
+          # Copy host.json to deployment folder for Azure Functions routing
+          cp host.json dist/deployment/
           cd dist/deployment
           zip -r ../function-deployment.zip .
           cd ../..
@@ -469,13 +472,59 @@ jobs:
           name: deployment-package-azure
           path: ./dist
 
+      - name: Generate parameters JSON
+        run: |
+          cat > /tmp/azure-parameters.json << EOF
+          {
+            "\$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+            "contentVersion": "1.0.0.0",
+            "parameters": {
+              "environment": {
+                "value": "${{ needs.setup.outputs.environment }}"
+              },
+              "location": {
+                "value": "${{ vars.AZURE_LOCATION || 'eastus' }}"
+              },
+              "projectName": {
+                "value": "${{ vars.AZURE_PROJECT_NAME || 'analytics-service' }}"
+              },
+              "analyticsWriteKey": {
+                "value": "${{ secrets.ANALYTICS_WRITE_KEY }}"
+              },
+              "corsAllowedOrigins": {
+                "value": "${{ vars.CORS_ALLOWED_ORIGINS || '*' }}"
+              },
+              "logLevel": {
+                "value": "${{ vars.LOG_LEVEL || (needs.setup.outputs.environment == 'prod' && 'info' || 'debug') }}"
+              },
+              "cosmosDbThroughput": {
+                "value": ${{ vars.AZURE_COSMOS_THROUGHPUT || 400 }}
+              },
+              "cosmosDbAutoscale": {
+                "value": ${{ vars.AZURE_COSMOS_AUTOSCALE || 'true' }}
+              },
+              "eventRetentionDays": {
+                "value": ${{ vars.EVENT_RETENTION_DAYS || 90 }}
+              },
+              "rawEventRetentionDays": {
+                "value": ${{ vars.RAW_EVENT_RETENTION_DAYS || 365 }}
+              },
+              "functionAppSku": {
+                "value": "${{ vars.AZURE_FUNCTION_SKU || 'Y1' }}"
+              }
+            }
+          }
+          EOF
+          
+          echo "Generated parameters.json:"
+          cat /tmp/azure-parameters.json
+
       - name: Deploy infrastructure
         run: |
           az deployment group create \
             --resource-group analytics-service-${{ needs.setup.outputs.environment }}-rg \
             --template-file infra/azure/main.bicep \
-            --parameters @infra/azure/parameters.${{ needs.setup.outputs.environment }}.json \
-            --parameters analyticsWriteKey=${{ secrets.ANALYTICS_WRITE_KEY }}
+            --parameters @/tmp/azure-parameters.json
 
       - name: Deploy to staging slot
         id: deploy

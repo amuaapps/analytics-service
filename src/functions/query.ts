@@ -7,7 +7,7 @@ import { getRequiredEnvVar } from '../config/env-loader.js';
 // Initialize dependencies
 const logger = createLogger({
   serviceName: 'analytics-service-azure',
-  env: (process.env.NODE_ENV as 'development' | 'staging' | 'production') || 'production',
+  env: (process.env.NODE_ENV as 'dev' | 'staging' | 'prod' | 'test') || 'prod',
   level: (process.env.LOG_LEVEL as 'debug' | 'info' | 'warn' | 'error') || 'info',
 });
 

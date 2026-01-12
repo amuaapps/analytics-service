@@ -1,6 +1,6 @@
 /**
  * AWS Lambda Entrypoints
- * 
+ *
  * This file exports the Lambda handlers that match the Terraform handler configuration.
  * Each handler is initialized with the appropriate dependencies and configuration.
  */
@@ -41,7 +41,8 @@ async function getWriteKey(): Promise<string> {
 
 // Validate authentication using shared helpers (supports key rotation)
 async function validateAuth(event: APIGatewayProxyEvent): Promise<void> {
-  const authHeader = event.headers['x-analytics-write-key'] || event.headers['X-Analytics-Write-Key'];
+  const authHeader =
+    event.headers['x-analytics-write-key'] || event.headers['X-Analytics-Write-Key'];
 
   if (!authHeader || typeof authHeader !== 'string') {
     throw new Error('AUTHENTICATION_ERROR: Missing or invalid write key');
@@ -49,9 +50,9 @@ async function validateAuth(event: APIGatewayProxyEvent): Promise<void> {
 
   const writeKeyConfig = await getWriteKey();
   const validKeys = parseWriteKeys(writeKeyConfig);
-  
+
   const isValid = validateWriteKey(authHeader, validKeys);
-  
+
   if (!isValid) {
     throw new Error('AUTHENTICATION_ERROR: Invalid write key');
   }
@@ -63,14 +64,16 @@ function createErrorResponse(
   statusCode: number = 500,
   requestId?: string
 ): APIGatewayProxyResult {
-  const message = error instanceof Error ? error.message.replace(/^[A-Z_]+:\s*/, '') : 'Internal server error';
-  const errorCode = error instanceof Error && error.message.startsWith('AUTHENTICATION_ERROR')
-    ? 'AUTHENTICATION_ERROR'
-    : statusCode === 400
-    ? 'VALIDATION_ERROR'
-    : statusCode === 413
-    ? 'PAYLOAD_TOO_LARGE'
-    : 'INTERNAL_SERVER_ERROR';
+  const message =
+    error instanceof Error ? error.message.replace(/^[A-Z_]+:\s*/, '') : 'Internal server error';
+  const errorCode =
+    error instanceof Error && error.message.startsWith('AUTHENTICATION_ERROR')
+      ? 'AUTHENTICATION_ERROR'
+      : statusCode === 400
+        ? 'VALIDATION_ERROR'
+        : statusCode === 413
+          ? 'PAYLOAD_TOO_LARGE'
+          : 'INTERNAL_SERVER_ERROR';
 
   const body: { error: { code: string; message: string }; requestId?: string } = {
     error: {
@@ -179,10 +182,13 @@ export async function queryHandler(
   } catch (error) {
     const logger = createLogger({
       serviceName: 'analytics-query',
-      env: process.env.NODE_ENV || 'development',
+      env: (process.env.NODE_ENV as 'dev' | 'staging' | 'prod' | 'test') || 'dev',
       level: (process.env.LOG_LEVEL as 'debug' | 'info' | 'warn' | 'error') || 'info',
     });
-    logger.error({ err: error, requestId: context.awsRequestId }, 'Query handler initialization error');
+    logger.error(
+      { err: error, requestId: context.awsRequestId },
+      'Query handler initialization error'
+    );
     throw error;
   }
 }
@@ -191,10 +197,7 @@ export async function queryHandler(
  * Processor Lambda Handler (SQS Trigger)
  * Terraform handler: "dist/app/aws/entrypoints.processorHandler"
  */
-export async function processorHandler(
-  event: SQSEvent,
-  context: Context
-): Promise<void> {
+export async function processorHandler(event: SQSEvent, context: Context): Promise<void> {
   try {
     // Lazy initialize handler
     if (!processorHandlerInstance) {
@@ -232,10 +235,13 @@ export async function processorHandler(
   } catch (error) {
     const logger = createLogger({
       serviceName: 'analytics-processor',
-      env: process.env.NODE_ENV || 'development',
+      env: (process.env.NODE_ENV as 'dev' | 'staging' | 'prod' | 'test') || 'dev',
       level: (process.env.LOG_LEVEL as 'debug' | 'info' | 'warn' | 'error') || 'info',
     });
-    logger.error({ err: error, requestId: context.awsRequestId }, 'Processor handler initialization error');
+    logger.error(
+      { err: error, requestId: context.awsRequestId },
+      'Processor handler initialization error'
+    );
     throw error;
   }
 }

@@ -11,10 +11,12 @@ import { loadLimitsConfig } from './limits.js';
 import { detectCloudProvider, loadAwsConfig, loadAzureConfig } from './cloud.js';
 
 function loadServiceConfig(): ServiceConfig {
-  const nodeEnv = getOptionalEnvVar('NODE_ENV', 'development') ?? 'development';
+  const nodeEnv = getOptionalEnvVar('NODE_ENV', 'dev') ?? 'dev';
   const env = validateEnvironment(nodeEnv);
 
-  const logLevelStr = getOptionalEnvVar('LOG_LEVEL', env === 'prod' ? 'info' : 'debug') ?? (env === 'prod' ? 'info' : 'debug');
+  const logLevelStr =
+    getOptionalEnvVar('LOG_LEVEL', env === 'prod' ? 'info' : 'debug') ??
+    (env === 'prod' ? 'info' : 'debug');
   const logLevel = validateLogLevel(logLevelStr);
 
   return {
@@ -27,7 +29,7 @@ function loadServiceConfig(): ServiceConfig {
 async function loadSecurityConfig(cloudProvider?: string): Promise<SecurityConfig> {
   // Load write key from secret store if cloud provider is detected
   let analyticsWriteKey: string;
-  
+
   if (cloudProvider === 'aws' || cloudProvider === 'azure') {
     const { loadAnalyticsWriteKey } = await import('./secrets.js');
     analyticsWriteKey = await loadAnalyticsWriteKey(cloudProvider as 'aws' | 'azure');

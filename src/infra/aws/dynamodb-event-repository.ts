@@ -1,8 +1,4 @@
-import {
-  DynamoDBClient,
-  PutItemCommand,
-  QueryCommand,
-} from '@aws-sdk/client-dynamodb';
+import { DynamoDBClient, PutItemCommand, QueryCommand } from '@aws-sdk/client-dynamodb';
 import { marshall, unmarshall } from '@aws-sdk/util-dynamodb';
 import type { EventRepository, QueryEventsResult } from '../interfaces.js';
 import type { StoredEvent } from '../../domain/stored-event-types.js';
@@ -19,7 +15,7 @@ export interface DynamoDBEventRepositoryConfig {
 
 /**
  * DynamoDB implementation of EventRepository
- * 
+ *
  * Table schema (multi-tenant safe):
  * - PK: appId (partition key)
  * - SK: occurredAt#eventId (sort key for time-based queries)
@@ -27,7 +23,7 @@ export interface DynamoDBEventRepositoryConfig {
  * - GSI1SK: occurredAt#eventId
  * - GSI2PK: appId#sessionId (composite key for session-based queries, scoped to app)
  * - GSI2SK: occurredAt#eventId
- * 
+ *
  * Security: All GSI partition keys include appId to prevent cross-app data leakage
  */
 export class DynamoDBEventRepository implements EventRepository {
@@ -47,9 +43,7 @@ export class DynamoDBEventRepository implements EventRepository {
       const batches = this.chunkArray(events, 25);
 
       for (const batch of batches) {
-        await Promise.all(
-          batch.map((event) => this.putEvent(event))
-        );
+        await Promise.all(batch.map((event) => this.putEvent(event)));
       }
 
       this.logger.info(
@@ -67,7 +61,18 @@ export class DynamoDBEventRepository implements EventRepository {
 
   async queryEvents(input: QueryEventsInput): Promise<QueryEventsResult> {
     try {
-      const { appId, from, to, userId, anonymousId, sessionId, limit = 50, cursor } = input;
+      const {
+        appId,
+        from,
+        to,
+        userId,
+        anonymousId,
+        sessionId,
+        types,
+        names,
+        limit = 50,
+        cursor,
+      } = input;
 
       // Determine which index to use and the appropriate sort key attribute
       let indexName: string | undefined;
@@ -97,21 +102,28 @@ export class DynamoDBEventRepository implements EventRepository {
       }
 
       // Add time range to sort key condition
-      // Note: 'to' is exclusive, so we use < instead of <=
+      // SK format: 'occurredAt#eventId' (e.g., '2026-01-01T00:00:00.000Z#evt-123')
+      // 'from' is inclusive (>=), 'to' is exclusive (<) per spec
+      //
+      // Key-bound strategy for composite sort key:
+      // - Lower bound: 'from#' includes all events at exactly 'from' timestamp
+      // - Upper bound: 'to#' excludes all events at exactly 'to' timestamp
+      //   (since 'to#' < 'to#eventId' for any eventId)
       if (from && to) {
-        // Use BETWEEN for both bounds (DynamoDB BETWEEN is inclusive on both ends)
-        // To make 'to' exclusive, we need to subtract 1ms from the timestamp
-        const exclusiveTo = new Date(new Date(to).getTime() - 1).toISOString();
+        // Use BETWEEN with key bounds
+        // Lower: 'from#' is inclusive (includes all events at from)
+        // Upper: 'to#' is exclusive (excludes all events at to, includes events before to)
         keyConditionExpression += ` AND ${sortKeyAttribute} BETWEEN :from AND :to`;
-        expressionAttributeValues[':from'] = from;
-        expressionAttributeValues[':to'] = exclusiveTo;
+        expressionAttributeValues[':from'] = `${from}#`;
+        expressionAttributeValues[':to'] = `${to}#`;
       } else if (from) {
+        // Lower bound: 'from#' includes all events at exactly from
         keyConditionExpression += ` AND ${sortKeyAttribute} >= :from`;
-        expressionAttributeValues[':from'] = from;
+        expressionAttributeValues[':from'] = `${from}#`;
       } else if (to) {
-        // 'to' is exclusive, so use < instead of <=
+        // Upper bound: 'to#' excludes all events at exactly to
         keyConditionExpression += ` AND ${sortKeyAttribute} < :to`;
-        expressionAttributeValues[':to'] = to;
+        expressionAttributeValues[':to'] = `${to}#`;
       }
 
       // Parse cursor if provided
@@ -119,7 +131,7 @@ export class DynamoDBEventRepository implements EventRepository {
       if (cursor) {
         try {
           const cursorData = decodeCursor(cursor);
-          
+
           // Cursor stores table PK (appId) and SK (occurredAt#eventId)
           // For backward compatibility, detect old format with composite keys
           let tablePK = cursorData.pk;
@@ -127,13 +139,13 @@ export class DynamoDBEventRepository implements EventRepository {
             // Old format: extract appId from composite key
             tablePK = tablePK.split('#')[0];
           }
-          
+
           // Build ExclusiveStartKey with all required keys
           exclusiveStartKey = {
             PK: tablePK,
             SK: cursorData.sk,
           };
-          
+
           // Add GSI keys if querying by index
           if (indexName === 'GSI1' && userId) {
             exclusiveStartKey.GSI1PK = `${tablePK}#${userId}`;
@@ -143,24 +155,59 @@ export class DynamoDBEventRepository implements EventRepository {
             exclusiveStartKey.GSI2SK = cursorData.sk;
           }
         } catch (error) {
-          this.logger.warn({ error: error instanceof Error ? error.message : 'Unknown' }, 'Invalid cursor provided');
+          this.logger.warn(
+            { error: error instanceof Error ? error.message : 'Unknown' },
+            'Invalid cursor provided'
+          );
           throw new Error('Invalid pagination cursor');
         }
       }
 
-      // Build FilterExpression for anonymousId if provided
-      // DynamoDB doesn't have a GSI for anonymousId, so we use FilterExpression
-      let filterExpression: string | undefined;
+      // Build FilterExpression for anonymousId, types, and names if provided
+      // DynamoDB doesn't have GSIs for these fields, so we use FilterExpression
+      const filterExpressions: string[] = [];
+      const expressionAttributeNames: Record<string, string> = {};
+
       if (anonymousId) {
-        filterExpression = 'actor.anonymousId = :anonymousId';
+        filterExpressions.push('actor.anonymousId = :anonymousId');
         expressionAttributeValues[':anonymousId'] = anonymousId;
       }
+
+      // Filter by types (event.type)
+      if (types && types.length > 0) {
+        // Use IN operator for multiple types
+        // Note: 'type' is a reserved keyword in DynamoDB, so we use expression attribute names
+        expressionAttributeNames['#type'] = 'type';
+        const typeConditions = types.map((_, index) => `:type${index}`).join(', ');
+        filterExpressions.push(`#type IN (${typeConditions})`);
+        types.forEach((type, index) => {
+          expressionAttributeValues[`:type${index}`] = type;
+        });
+      }
+
+      // Filter by names (event.name)
+      // Only relevant for track/page events; identify doesn't have name
+      if (names && names.length > 0) {
+        // Use IN operator for multiple names
+        // Note: 'name' is a reserved keyword in DynamoDB, so we use expression attribute names
+        expressionAttributeNames['#name'] = 'name';
+        const nameConditions = names.map((_, index) => `:name${index}`).join(', ');
+        filterExpressions.push(`#name IN (${nameConditions})`);
+        names.forEach((name, index) => {
+          expressionAttributeValues[`:name${index}`] = name;
+        });
+      }
+
+      const filterExpression =
+        filterExpressions.length > 0 ? filterExpressions.join(' AND ') : undefined;
 
       const command = new QueryCommand({
         TableName: this.tableName,
         IndexName: indexName,
         KeyConditionExpression: keyConditionExpression,
         FilterExpression: filterExpression,
+        ExpressionAttributeNames:
+          Object.keys(expressionAttributeNames).length > 0 ? expressionAttributeNames : undefined,
         ExpressionAttributeValues: marshall(expressionAttributeValues),
         Limit: limit + 1, // Fetch one extra to determine hasMore
         ExclusiveStartKey: exclusiveStartKey ? marshall(exclusiveStartKey) : undefined,
@@ -172,7 +219,7 @@ export class DynamoDBEventRepository implements EventRepository {
 
       const hasMore = items.length > limit;
       const events = hasMore ? items.slice(0, limit) : items;
-      
+
       // Generate canonical cursor from last item if hasMore
       let nextCursor: string | undefined;
       if (hasMore && events.length > 0) {
@@ -200,13 +247,13 @@ export class DynamoDBEventRepository implements EventRepository {
       // Note: This requires a GSI on eventId or a scan (expensive)
       // For production, consider maintaining a separate deduplication table
       // or using eventId as part of the primary key structure
-      
+
       // Simplified implementation - in production, use a dedicated GSI
       this.logger.warn(
         { eventId },
         'checkEventExists using scan - consider adding eventId GSI for production'
       );
-      
+
       // For now, return false to allow processing
       // TODO: Implement proper eventId lookup with GSI
       return false;
@@ -236,8 +283,8 @@ export class DynamoDBEventRepository implements EventRepository {
       // Add GSI keys with appId prefix for multi-tenant safety
       GSI1PK: event.actor.userId ? `${appId}#${event.actor.userId}` : `${appId}#anonymous`,
       GSI1SK: `${event.occurredAt}#${event.eventId}`,
-      GSI2PK: (event.context as { sessionId?: string })?.sessionId 
-        ? `${appId}#${(event.context as { sessionId?: string }).sessionId}` 
+      GSI2PK: (event.context as { sessionId?: string })?.sessionId
+        ? `${appId}#${(event.context as { sessionId?: string }).sessionId}`
         : `${appId}#no-session`,
       GSI2SK: `${event.occurredAt}#${event.eventId}`,
       // Type-specific fields

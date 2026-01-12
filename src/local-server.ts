@@ -1,10 +1,10 @@
 #!/usr/bin/env node
 /**
  * Local Development Server
- * 
+ *
  * Runs the analytics service with in-memory implementations for local development.
  * No cloud dependencies required.
- * 
+ *
  * Usage:
  *   npm run dev
  *   or
@@ -25,7 +25,7 @@ const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
 const logger = createLogger({
   serviceName: 'analytics-service',
   level: (process.env.LOG_LEVEL as 'debug' | 'info' | 'warn' | 'error') || 'info',
-  env: 'development',
+  env: 'dev',
 });
 
 // Create in-memory implementations (no cloud dependencies)
@@ -77,7 +77,7 @@ const server = app.listen(PORT, () => {
     },
     '🚀 Analytics Service started (local development mode)'
   );
-  
+
   logger.info(
     {
       ingest: `http://localhost:${PORT}/api/v1/events`,
@@ -86,14 +86,14 @@ const server = app.listen(PORT, () => {
     },
     '📍 Available endpoints'
   );
-  
+
   logger.info(
     {
       writeKey: config.security.analyticsWriteKey,
     },
     '🔑 Use this write key in X-Analytics-Write-Key header'
   );
-  
+
   logger.info('💡 Press Ctrl+C to stop');
 });
 
