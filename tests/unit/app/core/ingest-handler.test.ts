@@ -6,6 +6,7 @@ import { SCHEMA_VERSION } from '../../../../src/domain/base-types.js';
 
 describe('Core Ingest Handler', () => {
   let mockQueueAdapter: any;
+  let mockRawStorage: any;
   let logger: ReturnType<typeof createLogger>;
 
   beforeEach(() => {
@@ -13,6 +14,12 @@ describe('Core Ingest Handler', () => {
       enqueue: jest
         .fn<(message: CoreProcessorRequest) => Promise<void>>()
         .mockResolvedValue(undefined),
+    } as any;
+
+    mockRawStorage = {
+      storeRawBatch: jest.fn(() =>
+        Promise.resolve({ batchId: 'test-batch', storageLocation: 'test-location' })
+      ),
     } as any;
 
     logger = createLogger({
@@ -51,7 +58,7 @@ describe('Core Ingest Handler', () => {
       const result = await handleIngest(request, {
         logger,
         queueAdapter: mockQueueAdapter,
-        rawStorage: {} as any,
+        rawStorage: mockRawStorage,
       });
 
       expect(result.accepted).toBe(true);
@@ -62,6 +69,7 @@ describe('Core Ingest Handler', () => {
         expect.objectContaining({
           requestId: 'req-123',
           batchId: expect.any(String),
+          storageLocation: 'test-location',
           events: request.payload.events,
         })
       );
@@ -107,7 +115,7 @@ describe('Core Ingest Handler', () => {
       const result = await handleIngest(request, {
         logger,
         queueAdapter: mockQueueAdapter,
-        rawStorage: {} as any,
+        rawStorage: mockRawStorage,
       });
 
       expect(result.accepted).toBe(true);

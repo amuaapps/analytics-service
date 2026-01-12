@@ -181,7 +181,7 @@ describe('Configuration Module', () => {
       expect(config.limits.maxKeysPerLevel).toBe(50);
       expect(config.limits.maxStringLength).toBe(2048);
       expect(config.limits.maxArrayLength).toBe(100);
-      expect(config.limits.maxPayloadSizeBytes).toBe(32768);
+      expect(config.limits.maxPayloadSizeBytes).toBe(1048576);
       expect(config.limits.maxQueryWindowDays).toBe(31);
       expect(config.limits.defaultQueryLimit).toBe(50);
       expect(config.limits.maxQueryLimit).toBe(200);
@@ -224,11 +224,14 @@ describe('Configuration Module', () => {
 
     it('should detect Azure when Azure env vars are present', async () => {
       process.env.ANALYTICS_WRITE_KEY = 'test-key';
-      process.env.AZURE_COSMOS_ENDPOINT = 'https://test.documents.azure.com:443/';
-      process.env.AZURE_COSMOS_KEY = 'test-key';
+      process.env.AZURE_COSMOS_CONNECTION_STRING =
+        'AccountEndpoint=https://test.documents.azure.com:443/;AccountKey=test-key';
+      process.env.AZURE_COSMOS_DATABASE_NAME = 'analytics';
+      process.env.AZURE_COSMOS_CONTAINER_NAME = 'events';
       process.env.AZURE_STORAGE_CONNECTION_STRING =
         'DefaultEndpointsProtocol=https;AccountName=test';
       process.env.AZURE_QUEUE_NAME = 'analytics-events';
+      process.env.AZURE_BLOB_CONTAINER_NAME = 'raw-events';
 
       const config = await loadConfig();
 
@@ -256,8 +259,8 @@ describe('Configuration Module', () => {
       process.env.DYNAMODB_TABLE_NAME = 'analytics_events';
       process.env.S3_RAW_BUCKET_NAME = 'analytics-raw';
       process.env.SQS_QUEUE_URL = 'https://sqs.us-east-1.amazonaws.com/123/queue';
-      process.env.AZURE_COSMOS_ENDPOINT = 'https://test.documents.azure.com:443/';
-      process.env.AZURE_COSMOS_KEY = 'test-key';
+      process.env.AZURE_COSMOS_CONNECTION_STRING =
+        'AccountEndpoint=https://test.documents.azure.com:443/;AccountKey=test-key';
       process.env.AZURE_STORAGE_CONNECTION_STRING =
         'DefaultEndpointsProtocol=https;AccountName=test';
       process.env.AZURE_QUEUE_NAME = 'analytics-events';
