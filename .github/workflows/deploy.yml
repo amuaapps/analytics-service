@@ -95,9 +95,16 @@ jobs:
     steps:
       - name: Detect cloud provider
         id: detect
+        env:
+          AWS_ROLE_TO_ASSUME: ${{ vars.AWS_ROLE_TO_ASSUME }}
+          AZURE_CLIENT_ID: ${{ vars.AZURE_CLIENT_ID }}
         run: |
           ENVIRONMENT="${{ needs.setup.outputs.environment }}"
           CLOUD_INPUT="${{ inputs.cloud }}"
+          
+          echo "Checking cloud configuration for environment: $ENVIRONMENT"
+          echo "AWS_ROLE_TO_ASSUME: ${AWS_ROLE_TO_ASSUME:-(not set)}"
+          echo "AZURE_CLIENT_ID: ${AZURE_CLIENT_ID:-(not set)}"
           
           if [ "$CLOUD_INPUT" = "" ] || [ "$CLOUD_INPUT" = "auto" ]; then
             # Auto-detect based on environment-specific variables (OIDC roles/principals)
