@@ -17,6 +17,9 @@ describe('Azure Function HTTP Ingest - Invalid JSON Handling', () => {
   let handler: ReturnType<typeof createAzureFunctionIngestHandler>;
 
   beforeEach(() => {
+    // Set required environment variables
+    process.env.ANALYTICS_WRITE_KEY = 'test-key';
+
     mockLogger = {
       info: jest.fn(),
       warn: jest.fn(),

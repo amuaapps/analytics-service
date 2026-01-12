@@ -110,6 +110,11 @@ describe('Processor Handler - Error Handling', () => {
       limits,
     };
 
-    await expect(handleProcessor(request, deps)).rejects.toThrow('Failed to fetch raw batch');
+    const result = await handleProcessor(request, deps);
+
+    // The handler now returns errors instead of throwing
+    expect(result.errors).toBeDefined();
+    expect(result.errors!).toHaveLength(1);
+    expect(result.errors![0].error).toContain('Failed to fetch raw batch');
   });
 });

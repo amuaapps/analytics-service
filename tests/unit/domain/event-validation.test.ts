@@ -132,7 +132,7 @@ describe('Event Validation', () => {
       expect(result.success).toBe(true);
     });
 
-    it('should reject identify event without traits', () => {
+    it('should allow identify event without traits (traits are optional)', () => {
       const result = validate({
         schemaVersion: SCHEMA_VERSION,
         events: [
@@ -147,7 +147,7 @@ describe('Event Validation', () => {
         ],
       });
 
-      expect(result.success).toBe(false);
+      expect(result.success).toBe(true);
     });
   });
 

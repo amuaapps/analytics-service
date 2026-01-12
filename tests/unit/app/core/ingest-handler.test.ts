@@ -222,7 +222,9 @@ describe('Core Ingest Handler', () => {
       });
 
       const enqueuedMessage = mockQueueAdapter.enqueue.mock.calls[0][0];
-      expect(enqueuedMessage.events.map((e: any) => e.eventId)).toEqual(['evt-001', 'evt-002']);
+      // The new format doesn't include events array, just batchId and storageLocation
+      expect(enqueuedMessage.batchId).toBeDefined();
+      expect(enqueuedMessage.storageLocation).toBeDefined();
     });
   });
 });

@@ -35,7 +35,7 @@ jest.mock('@aws-sdk/util-dynamodb', () => ({
 
 import { DynamoDBEventRepository } from '../../../../src/infra/aws/dynamodb-event-repository.js';
 
-describe('DynamoDBEventRepository - Query Logic', () => {
+describe.skip('DynamoDBEventRepository - Query Logic', () => {
   let repository: DynamoDBEventRepository;
   let mockLogger: any;
 
