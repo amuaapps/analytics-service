@@ -11,7 +11,7 @@ export interface BlobRawEventStoreConfig {
 
 /**
  * Azure Blob Storage implementation of RawEventStore
- * 
+ *
  * Blob name structure: {blobPrefix}{appId}/{year}/{month}/{day}/{batchId}_{timestamp}.json
  * This allows for efficient partitioning and lifecycle policies
  */
@@ -132,17 +132,17 @@ export class BlobRawEventStore implements RawEventStore {
   private generateBlobName(batch: RawBatch): string {
     // Extract appId from first event (all events in batch should have same appId)
     const appId = batch.events[0]?.source?.appId || 'unknown';
-    
+
     // Parse receivedAt to create date-based partitioning
     const date = new Date(batch.receivedAt);
     const year = date.getUTCFullYear();
     const month = String(date.getUTCMonth() + 1).padStart(2, '0');
     const day = String(date.getUTCDate()).padStart(2, '0');
-    
+
     // Create unique filename with timestamp
     const timestamp = date.getTime();
     const filename = `${batch.batchId}_${timestamp}.json`;
-    
+
     // Construct full blob name: prefix/appId/year/month/day/filename
     return `${this.blobPrefix}${appId}/${year}/${month}/${day}/${filename}`;
   }

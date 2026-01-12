@@ -10,7 +10,9 @@ describe('Core Ingest Handler', () => {
 
   beforeEach(() => {
     mockQueueAdapter = {
-      enqueue: jest.fn<(message: CoreProcessorRequest) => Promise<void>>().mockResolvedValue(undefined),
+      enqueue: jest
+        .fn<(message: CoreProcessorRequest) => Promise<void>>()
+        .mockResolvedValue(undefined),
     } as any;
 
     logger = createLogger({
@@ -48,7 +50,8 @@ describe('Core Ingest Handler', () => {
 
       const result = await handleIngest(request, {
         logger,
-        queueAdapter: mockQueueAdapter, rawStorage: {} as any,
+        queueAdapter: mockQueueAdapter,
+        rawStorage: {} as any,
       });
 
       expect(result.accepted).toBe(true);
@@ -103,7 +106,8 @@ describe('Core Ingest Handler', () => {
 
       const result = await handleIngest(request, {
         logger,
-        queueAdapter: mockQueueAdapter, rawStorage: {} as any,
+        queueAdapter: mockQueueAdapter,
+        rawStorage: {} as any,
       });
 
       expect(result.accepted).toBe(true);
@@ -132,12 +136,14 @@ describe('Core Ingest Handler', () => {
 
       const result1 = await handleIngest(request, {
         logger,
-        queueAdapter: mockQueueAdapter, rawStorage: {} as any,
+        queueAdapter: mockQueueAdapter,
+        rawStorage: {} as any,
       });
 
       const result2 = await handleIngest(request, {
         logger,
-        queueAdapter: mockQueueAdapter, rawStorage: {} as any,
+        queueAdapter: mockQueueAdapter,
+        rawStorage: {} as any,
       });
 
       expect(result1.batchId).not.toBe(result2.batchId);
@@ -167,7 +173,8 @@ describe('Core Ingest Handler', () => {
       await expect(
         handleIngest(request, {
           logger,
-          queueAdapter: mockQueueAdapter, rawStorage: {} as any,
+          queueAdapter: mockQueueAdapter,
+          rawStorage: {} as any,
         })
       ).rejects.toThrow('Queue error');
     });
@@ -202,7 +209,8 @@ describe('Core Ingest Handler', () => {
 
       await handleIngest(request, {
         logger,
-        queueAdapter: mockQueueAdapter, rawStorage: {} as any,
+        queueAdapter: mockQueueAdapter,
+        rawStorage: {} as any,
       });
 
       const enqueuedMessage = mockQueueAdapter.enqueue.mock.calls[0][0];

@@ -75,7 +75,9 @@ describe('Configuration Module', () => {
       process.env.ANALYTICS_WRITE_KEY = 'test-key';
 
       await expect(loadConfig()).rejects.toThrow(ConfigurationError);
-      await expect(loadConfig()).rejects.toThrow('LOG_LEVEL must be one of: debug, info, warn, error');
+      await expect(loadConfig()).rejects.toThrow(
+        'LOG_LEVEL must be one of: debug, info, warn, error'
+      );
     });
 
     it('should cache configuration after first load', async () => {
@@ -135,7 +137,8 @@ describe('Configuration Module', () => {
   describe('Security Configuration', () => {
     it('should parse CORS origins from comma-separated string', async () => {
       process.env.ANALYTICS_WRITE_KEY = 'test-key';
-      process.env.CORS_ALLOWED_ORIGINS = 'https://example.com, https://app.example.com, https://admin.example.com';
+      process.env.CORS_ALLOWED_ORIGINS =
+        'https://example.com, https://app.example.com, https://admin.example.com';
 
       const config = await loadConfig();
 
@@ -221,7 +224,8 @@ describe('Configuration Module', () => {
       process.env.ANALYTICS_WRITE_KEY = 'test-key';
       process.env.AZURE_COSMOS_ENDPOINT = 'https://test.documents.azure.com:443/';
       process.env.AZURE_COSMOS_KEY = 'test-key';
-      process.env.AZURE_STORAGE_CONNECTION_STRING = 'DefaultEndpointsProtocol=https;AccountName=test';
+      process.env.AZURE_STORAGE_CONNECTION_STRING =
+        'DefaultEndpointsProtocol=https;AccountName=test';
       process.env.AZURE_QUEUE_NAME = 'analytics-events';
 
       const config = await loadConfig();
@@ -252,7 +256,8 @@ describe('Configuration Module', () => {
       process.env.SQS_QUEUE_URL = 'https://sqs.us-east-1.amazonaws.com/123/queue';
       process.env.AZURE_COSMOS_ENDPOINT = 'https://test.documents.azure.com:443/';
       process.env.AZURE_COSMOS_KEY = 'test-key';
-      process.env.AZURE_STORAGE_CONNECTION_STRING = 'DefaultEndpointsProtocol=https;AccountName=test';
+      process.env.AZURE_STORAGE_CONNECTION_STRING =
+        'DefaultEndpointsProtocol=https;AccountName=test';
       process.env.AZURE_QUEUE_NAME = 'analytics-events';
 
       await expect(loadConfig()).rejects.toThrow(ConfigurationError);
@@ -274,7 +279,9 @@ describe('Configuration Module', () => {
       process.env.CLOUD_PROVIDER = 'aws';
 
       await expect(loadConfig()).rejects.toThrow(ConfigurationError);
-      await expect(loadConfig()).rejects.toThrow('Missing required environment variable: AWS_REGION');
+      await expect(loadConfig()).rejects.toThrow(
+        'Missing required environment variable: AWS_REGION'
+      );
     });
 
     it('should throw error when Azure is selected but required vars are missing', async () => {
@@ -282,7 +289,9 @@ describe('Configuration Module', () => {
       process.env.CLOUD_PROVIDER = 'azure';
 
       await expect(loadConfig()).rejects.toThrow(ConfigurationError);
-      await expect(loadConfig()).rejects.toThrow('Missing required environment variable: AZURE_COSMOS_ENDPOINT');
+      await expect(loadConfig()).rejects.toThrow(
+        'Missing required environment variable: AZURE_COSMOS_ENDPOINT'
+      );
     });
   });
 });

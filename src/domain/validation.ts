@@ -69,7 +69,9 @@ function createValidatePropertiesDepth(limits: LimitsConfig) {
 
     if (Array.isArray(obj)) {
       if (obj.length > limits.maxArrayLength) return false;
-      return obj.every((item) => createValidatePropertiesDepth(limits)(item, maxDepth, currentDepth + 1));
+      return obj.every((item) =>
+        createValidatePropertiesDepth(limits)(item, maxDepth, currentDepth + 1)
+      );
     }
 
     const keys = Object.keys(obj);
@@ -77,7 +79,11 @@ function createValidatePropertiesDepth(limits: LimitsConfig) {
     if (!keys.every(validatePropertyKey)) return false;
 
     return keys.every((key) =>
-      createValidatePropertiesDepth(limits)((obj as Record<string, unknown>)[key], maxDepth, currentDepth + 1)
+      createValidatePropertiesDepth(limits)(
+        (obj as Record<string, unknown>)[key],
+        maxDepth,
+        currentDepth + 1
+      )
     );
   };
 }
@@ -101,7 +107,7 @@ function createValidateStringLength(limits: LimitsConfig) {
 function createPropertiesSchema(limits: LimitsConfig) {
   const validatePropertiesDepth = createValidatePropertiesDepth(limits);
   const validateStringLength = createValidateStringLength(limits);
-  
+
   return z
     .record(z.unknown())
     .refine((data) => validatePropertiesDepth(data, limits.maxPropertyDepth), {
@@ -116,7 +122,7 @@ function createPropertiesSchema(limits: LimitsConfig) {
 function createTraitsSchema(limits: LimitsConfig) {
   const validatePropertiesDepth = createValidatePropertiesDepth(limits);
   const validateStringLength = createValidateStringLength(limits);
-  
+
   return z
     .record(z.unknown())
     .refine((data) => validatePropertiesDepth(data, limits.maxPropertyDepth), {
@@ -140,7 +146,7 @@ const baseEventSchema = z.object({
 
 function createTrackEventSchema(limits: LimitsConfig) {
   const propertiesSchema = createPropertiesSchema(limits);
-  
+
   return baseEventSchema.extend({
     type: z.literal('track'),
     name: z.string().regex(EVENT_NAME_PATTERN, {
@@ -152,7 +158,7 @@ function createTrackEventSchema(limits: LimitsConfig) {
 
 function createPageEventSchema(limits: LimitsConfig) {
   const propertiesSchema = createPropertiesSchema(limits);
-  
+
   return baseEventSchema.extend({
     type: z.literal('page'),
     name: z.string().regex(EVENT_NAME_PATTERN, {
@@ -164,7 +170,7 @@ function createPageEventSchema(limits: LimitsConfig) {
 
 function createIdentifyEventSchema(limits: LimitsConfig) {
   const traitsSchema = createTraitsSchema(limits);
-  
+
   return baseEventSchema.extend({
     type: z.literal('identify'),
     traits: traitsSchema,
@@ -181,14 +187,17 @@ function createIngestEventSchema(limits: LimitsConfig) {
 
 export function createIngestRequestEnvelopeSchema(limits: LimitsConfig) {
   const ingestEventSchema = createIngestEventSchema(limits);
-  
+
   return z
     .object({
       schemaVersion: z.literal(SCHEMA_VERSION),
       sentAt: z.string().datetime().optional(),
       events: z
         .array(ingestEventSchema)
-        .min(limits.minEventsPerBatch, `Batch must contain at least ${limits.minEventsPerBatch} event`)
+        .min(
+          limits.minEventsPerBatch,
+          `Batch must contain at least ${limits.minEventsPerBatch} event`
+        )
         .max(
           limits.maxEventsPerBatch,
           `Batch must not exceed ${limits.maxEventsPerBatch} events per request`
@@ -230,7 +239,7 @@ export function createValidateIngestRequestEnvelope(limits: LimitsConfig) {
   const schema = createIngestRequestEnvelopeSchema(limits);
   return (data: unknown) => {
     const result = schema.safeParse(data);
-    
+
     // Normalize actor.sessionId to context.sessionId for backward compatibility
     if (result.success) {
       result.data.events = result.data.events.map((event) => {
@@ -251,7 +260,7 @@ export function createValidateIngestRequestEnvelope(limits: LimitsConfig) {
         return event;
       });
     }
-    
+
     return result;
   };
 }

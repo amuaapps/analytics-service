@@ -35,7 +35,10 @@ function corsMiddleware(config: Config) {
     }
 
     res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-Analytics-Write-Key, X-Request-ID');
+    res.setHeader(
+      'Access-Control-Allow-Headers',
+      'Content-Type, X-Analytics-Write-Key, X-Request-ID'
+    );
     res.setHeader('Access-Control-Max-Age', '86400');
 
     if (req.method === 'OPTIONS') {
@@ -54,21 +57,24 @@ function errorHandler(logger: Logger) {
   };
 }
 
-
 export function createServer(deps: ServerDependencies): Express {
   const { logger, queueAdapter, storageAdapter, rawStorage, config } = deps;
   const app = express();
 
   // JSON body parser with payload size limit
-  app.use(express.json({ 
-    limit: config.limits.maxPayloadSizeBytes,
-    // Handle payload too large errors
-    verify: (_req: Request, _res: Response, buf: Buffer) => {
-      if (buf.length > config.limits.maxPayloadSizeBytes) {
-        throw new PayloadTooLargeError(`Payload exceeds maximum size of ${config.limits.maxPayloadSizeBytes} bytes`);
-      }
-    }
-  }));
+  app.use(
+    express.json({
+      limit: config.limits.maxPayloadSizeBytes,
+      // Handle payload too large errors
+      verify: (_req: Request, _res: Response, buf: Buffer) => {
+        if (buf.length > config.limits.maxPayloadSizeBytes) {
+          throw new PayloadTooLargeError(
+            `Payload exceeds maximum size of ${config.limits.maxPayloadSizeBytes} bytes`
+          );
+        }
+      },
+    })
+  );
   app.use(requestIdMiddleware);
   app.use(corsMiddleware(config));
 
@@ -83,7 +89,7 @@ export function createServer(deps: ServerDependencies): Express {
     validationMiddleware,
     (req: Request, res: Response, next: NextFunction): void => {
       const requestId: string = req.id ?? 'unknown';
-      
+
       handleIngest(
         {
           requestId,

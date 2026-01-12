@@ -54,7 +54,10 @@ describe('Lambda HTTP Query Handler', () => {
           anonymousId: 'anon-456',
           sessionId: 'session-789',
           limit: '100',
-          cursor: Buffer.from(JSON.stringify({ pk: 'test-app', sk: '2024-01-01T00:00:00Z#event-123' }), 'utf-8').toString('base64url'),
+          cursor: Buffer.from(
+            JSON.stringify({ pk: 'test-app', sk: '2024-01-01T00:00:00Z#event-123' }),
+            'utf-8'
+          ).toString('base64url'),
           sort: 'asc',
         },
         body: null,
@@ -92,7 +95,10 @@ describe('Lambda HTTP Query Handler', () => {
           anonymousId: 'anon-456',
           sessionId: 'session-789',
           limit: 100,
-          cursor: Buffer.from(JSON.stringify({ pk: 'test-app', sk: '2024-01-01T00:00:00Z#event-123' }), 'utf-8').toString('base64url'),
+          cursor: Buffer.from(
+            JSON.stringify({ pk: 'test-app', sk: '2024-01-01T00:00:00Z#event-123' }),
+            'utf-8'
+          ).toString('base64url'),
           sort: 'asc',
         })
       );
@@ -330,7 +336,10 @@ describe('Lambda HTTP Query Handler', () => {
         { eventId: 'event-2', type: 'page' },
       ];
 
-      const expectedCursor = Buffer.from(JSON.stringify({ pk: 'test-app', sk: '2024-01-02T00:00:00Z#event-456' }), 'utf-8').toString('base64url');
+      const expectedCursor = Buffer.from(
+        JSON.stringify({ pk: 'test-app', sk: '2024-01-02T00:00:00Z#event-456' }),
+        'utf-8'
+      ).toString('base64url');
 
       (mockStorageAdapter.queryEvents as any).mockResolvedValue({
         events: mockEvents,
@@ -347,12 +356,12 @@ describe('Lambda HTTP Query Handler', () => {
 
       expect(result.statusCode).toBe(200);
       const body = JSON.parse(result.body);
-      
+
       expect(body).toHaveProperty('items');
       expect(body).toHaveProperty('nextCursor');
       expect(body).not.toHaveProperty('events');
       expect(body).not.toHaveProperty('hasMore');
-      
+
       expect(body.items).toEqual(mockEvents);
       expect(body.nextCursor).toBe(expectedCursor);
     });
@@ -391,7 +400,7 @@ describe('Lambda HTTP Query Handler', () => {
 
       expect(result.statusCode).toBe(200);
       const body = JSON.parse(result.body);
-      
+
       expect(body).toHaveProperty('items');
       expect(body).not.toHaveProperty('nextCursor');
     });

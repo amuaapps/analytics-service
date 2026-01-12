@@ -63,12 +63,20 @@ function createSuccessResponse(result: {
   };
 }
 
-function createErrorResponse(error: unknown, statusCode: number = 500, requestId?: string): APIGatewayProxyResult {
+function createErrorResponse(
+  error: unknown,
+  statusCode: number = 500,
+  requestId?: string
+): APIGatewayProxyResult {
   const message = error instanceof Error ? error.message : 'Internal server error';
-  const code = statusCode === 400 ? 'VALIDATION_ERROR'
-    : statusCode === 401 ? 'AUTHENTICATION_ERROR'
-    : statusCode === 404 ? 'NOT_FOUND'
-    : 'INTERNAL_SERVER_ERROR';
+  const code =
+    statusCode === 400
+      ? 'VALIDATION_ERROR'
+      : statusCode === 401
+        ? 'AUTHENTICATION_ERROR'
+        : statusCode === 404
+          ? 'NOT_FOUND'
+          : 'INTERNAL_SERVER_ERROR';
 
   const body: {
     error: { code: string; message: string };
@@ -96,14 +104,14 @@ function createErrorResponse(error: unknown, statusCode: number = 500, requestId
 export function createLambdaQueryHandler(deps: LambdaQueryDependencies) {
   return async (event: APIGatewayProxyEvent, context: Context): Promise<APIGatewayProxyResult> => {
     const requestId = context.awsRequestId;
-    
+
     try {
       const coreRequest = createCoreRequest(event);
       const result = await handleQuery(coreRequest, deps);
       return createSuccessResponse(result);
     } catch (error) {
       deps.logger.error({ err: error, requestId }, 'Lambda query handler error');
-      
+
       // Handle Zod validation errors (same as Express)
       if (error instanceof Error && isZodError(error)) {
         const validationError = sanitizeZodError(error);

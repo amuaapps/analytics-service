@@ -8,9 +8,11 @@ import { parseWriteKeys, validateWriteKey as validateWriteKeyShared } from '../m
  * Supports comma-separated keys for rotation
  * Uses constant-time comparison to prevent timing attacks
  */
-export async function validateWriteKey(request: HttpRequest): Promise<{ valid: boolean; error?: HttpResponseInit }> {
+export async function validateWriteKey(
+  request: HttpRequest
+): Promise<{ valid: boolean; error?: HttpResponseInit }> {
   const writeKeyConfig = getOptionalEnvVar('ANALYTICS_WRITE_KEY');
-  
+
   if (!writeKeyConfig) {
     return {
       valid: false,
@@ -28,7 +30,7 @@ export async function validateWriteKey(request: HttpRequest): Promise<{ valid: b
   }
 
   const providedKey = request.headers.get('x-analytics-write-key');
-  
+
   if (!providedKey) {
     return {
       valid: false,

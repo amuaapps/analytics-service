@@ -27,7 +27,7 @@ export function getOptionalEnvVar(key: string, defaultValue?: string): string | 
 }
 
 export function getEnvVarAsInt(
-  name: string, 
+  name: string,
   defaultValue: number,
   options?: { min?: number; max?: number }
 ): number {

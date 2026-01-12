@@ -17,7 +17,9 @@ function parseSQSMessage(record: SQSRecord): CoreProcessorRequest {
     const message = JSON.parse(record.body) as CoreProcessorRequest;
     return message;
   } catch (error) {
-    throw new Error(`Failed to parse SQS message: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    throw new Error(
+      `Failed to parse SQS message: ${error instanceof Error ? error.message : 'Unknown error'}`
+    );
   }
 }
 
@@ -29,15 +31,12 @@ export function createLambdaSQSProcessorHandler(deps: LambdaProcessorDependencie
       try {
         const coreRequest = parseSQSMessage(record);
 
-        const result = await handleProcessor(
-          coreRequest,
-          {
-            logger,
-            operationalStorage,
-            rawStorage,
-            limits,
-          }
-        );
+        const result = await handleProcessor(coreRequest, {
+          logger,
+          operationalStorage,
+          rawStorage,
+          limits,
+        });
 
         if (result.failed > 0) {
           logger.error(

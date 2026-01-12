@@ -10,7 +10,7 @@ export interface AzureQueuePublisherConfig {
 
 /**
  * Azure Storage Queue implementation of QueuePublisher
- * 
+ *
  * Assumptions:
  * - Queue is configured with appropriate visibility timeout (e.g., 5 minutes)
  * - Poison message handling is configured (max dequeue count)
@@ -37,7 +37,6 @@ export class AzureQueuePublisher implements QueuePublisher {
       const response = await this.queueClient.sendMessage(encodedMessage, {
         // Optional: Set message TTL (time-to-live)
         // messageTimeToLive: 7 * 24 * 60 * 60, // 7 days in seconds
-        
         // Optional: Set visibility timeout (delay before message is visible)
         // visibilityTimeout: 0,
       });

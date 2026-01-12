@@ -62,12 +62,10 @@ describe('Error Handling Integration Tests', () => {
 
   describe('Consistent Error Response Format', () => {
     it('should return consistent 401 error format for missing auth', async () => {
-      const response = await request(server)
-        .post('/api/v1/events')
-        .send({
-          schemaVersion: '1.0.0',
-          events: [],
-        });
+      const response = await request(server).post('/api/v1/events').send({
+        schemaVersion: '1.0.0',
+        events: [],
+      });
 
       expect(response.status).toBe(401);
       expect(response.body).toHaveProperty('error');
@@ -113,12 +111,10 @@ describe('Error Handling Integration Tests', () => {
     });
 
     it('should return consistent 400 error format for query validation', async () => {
-      const response = await request(server)
-        .get('/api/v1/events')
-        .query({
-          // Missing required appId
-          from: '2026-01-01T00:00:00Z',
-        });
+      const response = await request(server).get('/api/v1/events').query({
+        // Missing required appId
+        from: '2026-01-01T00:00:00Z',
+      });
 
       expect(response.status).toBe(400);
       expect(response.body).toHaveProperty('error');
@@ -128,13 +124,11 @@ describe('Error Handling Integration Tests', () => {
     });
 
     it('should return consistent 400 error for invalid cursor', async () => {
-      const response = await request(server)
-        .get('/api/v1/events')
-        .query({
-          appId: 'test-app',
-          from: '2026-01-01T00:00:00Z',
-          cursor: 'invalid-cursor-format',
-        });
+      const response = await request(server).get('/api/v1/events').query({
+        appId: 'test-app',
+        from: '2026-01-01T00:00:00Z',
+        cursor: 'invalid-cursor-format',
+      });
 
       expect(response.status).toBe(400);
       expect(response.body).toHaveProperty('error');
@@ -206,9 +200,7 @@ describe('Error Handling Integration Tests', () => {
     });
 
     it('should generate requestId if not provided', async () => {
-      const response = await request(server)
-        .post('/api/v1/events')
-        .send({});
+      const response = await request(server).post('/api/v1/events').send({});
 
       expect(response.status).toBe(401);
       expect(response.body).toHaveProperty('requestId');

@@ -15,7 +15,7 @@ export interface CosmosEventRepositoryConfig {
 
 /**
  * Cosmos DB implementation of EventRepository
- * 
+ *
  * Container schema:
  * - Partition key: /pk (top-level field set to appId for efficient queries)
  * - Composite indexes on occurredAt, userId, sessionId for query performance
@@ -60,11 +60,11 @@ export class CosmosEventRepository implements EventRepository {
       // Check for real failures (excluding 409 conflicts which shouldn't happen with Upsert)
       // Upsert returns 200 (OK) for updates and 201 (Created) for new items
       const failures = response.filter((r: CosmosBulkResponseItem) => r.statusCode >= 400);
-      
+
       if (failures.length > 0) {
         // Log details about failures for debugging
         this.logger.error(
-          { 
+          {
             failures: failures.map((f: CosmosBulkResponseItem) => ({
               statusCode: f.statusCode,
               resourceBody: f.resourceBody,
@@ -82,7 +82,7 @@ export class CosmosEventRepository implements EventRepository {
       const updated = response.filter((r: { statusCode: number }) => r.statusCode === 200).length;
 
       this.logger.info(
-        { 
+        {
           eventCount: events.length,
           created,
           updated,
@@ -101,7 +101,18 @@ export class CosmosEventRepository implements EventRepository {
 
   async queryEvents(input: QueryEventsInput): Promise<QueryEventsResult> {
     try {
-      const { appId, from, to, userId, anonymousId, sessionId, types, names, limit = 50, cursor } = input;
+      const {
+        appId,
+        from,
+        to,
+        userId,
+        anonymousId,
+        sessionId,
+        types,
+        names,
+        limit = 50,
+        cursor,
+      } = input;
 
       // Build SQL query - query by pk (partition key) for efficiency
       let query = 'SELECT * FROM c WHERE c.pk = @appId';
@@ -168,23 +179,26 @@ export class CosmosEventRepository implements EventRepository {
           // pk is used for validation/consistency
           continuationToken = cursorData.sk;
         } catch (error) {
-          this.logger.warn({ error: error instanceof Error ? error.message : 'Unknown' }, 'Invalid cursor provided');
+          this.logger.warn(
+            { error: error instanceof Error ? error.message : 'Unknown' },
+            'Invalid cursor provided'
+          );
           throw new Error('Invalid pagination cursor');
         }
       }
 
-      const iterator = await this.container.items
-        .query<StoredEvent>(querySpec, {
-          maxItemCount: limit + 1, // Fetch one extra to determine hasMore
-          continuationToken,
-          partitionKey: appId, // Partition key value (matches pk field)
-        });
+      const iterator = await this.container.items.query<StoredEvent>(querySpec, {
+        maxItemCount: limit + 1, // Fetch one extra to determine hasMore
+        continuationToken,
+        partitionKey: appId, // Partition key value (matches pk field)
+      });
 
-      const { resources: items, continuationToken: nextContinuationToken } = await iterator.fetchNext();
+      const { resources: items, continuationToken: nextContinuationToken } =
+        await iterator.fetchNext();
 
       const hasMore = items.length > limit;
       const events = hasMore ? items.slice(0, limit) : items;
-      
+
       // Generate canonical cursor wrapping Cosmos continuation token
       let nextCursor: string | undefined;
       if (hasMore && nextContinuationToken) {
@@ -214,7 +228,7 @@ export class CosmosEventRepository implements EventRepository {
       // Query by document ID
       // Note: This requires knowing the partition key or doing a cross-partition query
       // For production, consider maintaining a separate container for deduplication
-      
+
       const query = 'SELECT VALUE COUNT(1) FROM c WHERE c.id = @eventId';
       const { resources } = await this.container.items
         .query({

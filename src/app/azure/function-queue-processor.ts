@@ -19,7 +19,9 @@ function parseQueueMessage(message: unknown): CoreProcessorRequest {
     }
     return message as CoreProcessorRequest;
   } catch (error) {
-    throw new Error(`Failed to parse queue message: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    throw new Error(
+      `Failed to parse queue message: ${error instanceof Error ? error.message : 'Unknown error'}`
+    );
   }
 }
 

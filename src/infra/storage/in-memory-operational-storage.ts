@@ -44,7 +44,10 @@ export class InMemoryOperationalStorage implements EventRepository {
       try {
         cursorData = decodeCursor(input.cursor);
       } catch (error) {
-        this.logger.warn({ error: error instanceof Error ? error.message : 'Unknown' }, 'Invalid cursor provided');
+        this.logger.warn(
+          { error: error instanceof Error ? error.message : 'Unknown' },
+          'Invalid cursor provided'
+        );
         throw new Error('Invalid pagination cursor');
       }
     }
@@ -109,7 +112,7 @@ export class InMemoryOperationalStorage implements EventRepository {
         const sk = `${e.occurredAt}#${e.eventId}`;
         return sk === cursorSk;
       });
-      
+
       if (cursorIndex >= 0) {
         results = results.slice(cursorIndex + 1);
       }

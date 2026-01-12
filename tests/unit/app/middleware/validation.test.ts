@@ -466,7 +466,7 @@ describe('Validation Middleware', () => {
   describe('error message sanitization', () => {
     it('should sanitize error messages containing sensitive keywords', () => {
       const middleware = createValidationMiddleware(mockLogger, limits);
-      
+
       mockReq.body = undefined;
 
       middleware(mockReq as Request, mockRes as Response, mockNext);

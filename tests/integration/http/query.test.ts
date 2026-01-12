@@ -63,35 +63,29 @@ describe('Query API Integration Tests', () => {
 
   describe('GET /api/v1/events', () => {
     it('should return 400 when appId is missing', async () => {
-      const response = await request(server)
-        .get('/api/v1/events')
-        .query({
-          from: '2026-01-01T00:00:00Z',
-        });
+      const response = await request(server).get('/api/v1/events').query({
+        from: '2026-01-01T00:00:00Z',
+      });
 
       expect(response.status).toBe(400);
       expect(response.body).toHaveProperty('error');
     });
 
     it('should return 400 when from is missing', async () => {
-      const response = await request(server)
-        .get('/api/v1/events')
-        .query({
-          appId: 'test-app',
-        });
+      const response = await request(server).get('/api/v1/events').query({
+        appId: 'test-app',
+      });
 
       expect(response.status).toBe(400);
       expect(response.body).toHaveProperty('error');
     });
 
     it('should return 400 when date range exceeds 31 days', async () => {
-      const response = await request(server)
-        .get('/api/v1/events')
-        .query({
-          appId: 'test-app',
-          from: '2026-01-01T00:00:00Z',
-          to: '2026-03-01T00:00:00Z', // 59 days
-        });
+      const response = await request(server).get('/api/v1/events').query({
+        appId: 'test-app',
+        from: '2026-01-01T00:00:00Z',
+        to: '2026-03-01T00:00:00Z', // 59 days
+      });
 
       expect(response.status).toBe(400);
       expect(response.body).toHaveProperty('error');
@@ -99,26 +93,22 @@ describe('Query API Integration Tests', () => {
     });
 
     it('should return 400 when to is before from', async () => {
-      const response = await request(server)
-        .get('/api/v1/events')
-        .query({
-          appId: 'test-app',
-          from: '2026-01-10T00:00:00Z',
-          to: '2026-01-05T00:00:00Z',
-        });
+      const response = await request(server).get('/api/v1/events').query({
+        appId: 'test-app',
+        from: '2026-01-10T00:00:00Z',
+        to: '2026-01-05T00:00:00Z',
+      });
 
       expect(response.status).toBe(400);
       expect(response.body).toHaveProperty('error');
     });
 
     it('should return 400 when limit exceeds maximum', async () => {
-      const response = await request(server)
-        .get('/api/v1/events')
-        .query({
-          appId: 'test-app',
-          from: '2026-01-01T00:00:00Z',
-          limit: 300,
-        });
+      const response = await request(server).get('/api/v1/events').query({
+        appId: 'test-app',
+        from: '2026-01-01T00:00:00Z',
+        limit: 300,
+      });
 
       expect(response.status).toBe(400);
       expect(response.body).toHaveProperty('error');
@@ -126,13 +116,11 @@ describe('Query API Integration Tests', () => {
     });
 
     it('should return empty results when no events exist', async () => {
-      const response = await request(server)
-        .get('/api/v1/events')
-        .query({
-          appId: 'test-app',
-          from: '2026-01-01T00:00:00Z',
-          to: '2026-01-02T00:00:00Z',
-        });
+      const response = await request(server).get('/api/v1/events').query({
+        appId: 'test-app',
+        from: '2026-01-01T00:00:00Z',
+        to: '2026-01-02T00:00:00Z',
+      });
 
       expect(response.status).toBe(200);
       expect(response.body).toHaveProperty('items');
@@ -171,13 +159,11 @@ describe('Query API Integration Tests', () => {
 
       await storageAdapter.storeEvents(testEvents);
 
-      const response = await request(server)
-        .get('/api/v1/events')
-        .query({
-          appId: 'web-app',
-          from: '2026-01-08T00:00:00Z',
-          to: '2026-01-09T00:00:00Z',
-        });
+      const response = await request(server).get('/api/v1/events').query({
+        appId: 'web-app',
+        from: '2026-01-08T00:00:00Z',
+        to: '2026-01-09T00:00:00Z',
+      });
 
       expect(response.status).toBe(200);
       expect(response.body).toHaveProperty('items');
@@ -220,14 +206,12 @@ describe('Query API Integration Tests', () => {
 
       await storageAdapter.storeEvents(testEvents);
 
-      const response = await request(server)
-        .get('/api/v1/events')
-        .query({
-          appId: 'web-app',
-          from: '2026-01-08T00:00:00Z',
-          to: '2026-01-09T00:00:00Z',
-          types: 'track',
-        });
+      const response = await request(server).get('/api/v1/events').query({
+        appId: 'web-app',
+        from: '2026-01-08T00:00:00Z',
+        to: '2026-01-09T00:00:00Z',
+        types: 'track',
+      });
 
       expect(response.status).toBe(200);
       expect(response.body.items).toHaveLength(1);
@@ -264,14 +248,12 @@ describe('Query API Integration Tests', () => {
 
       await storageAdapter.storeEvents(testEvents);
 
-      const response = await request(server)
-        .get('/api/v1/events')
-        .query({
-          appId: 'web-app',
-          from: '2026-01-08T00:00:00Z',
-          to: '2026-01-09T00:00:00Z',
-          userId: 'user-123',
-        });
+      const response = await request(server).get('/api/v1/events').query({
+        appId: 'web-app',
+        from: '2026-01-08T00:00:00Z',
+        to: '2026-01-09T00:00:00Z',
+        userId: 'user-123',
+      });
 
       expect(response.status).toBe(200);
       expect(response.body.items).toHaveLength(1);
@@ -294,14 +276,12 @@ describe('Query API Integration Tests', () => {
 
       await storageAdapter.storeEvents(testEvents);
 
-      const response = await request(server)
-        .get('/api/v1/events')
-        .query({
-          appId: 'web-app',
-          from: '2026-01-08T00:00:00Z',
-          to: '2026-01-09T00:00:00Z',
-          limit: 5,
-        });
+      const response = await request(server).get('/api/v1/events').query({
+        appId: 'web-app',
+        from: '2026-01-08T00:00:00Z',
+        to: '2026-01-09T00:00:00Z',
+        limit: 5,
+      });
 
       expect(response.status).toBe(200);
       expect(response.body.items).toHaveLength(5);
@@ -325,14 +305,12 @@ describe('Query API Integration Tests', () => {
       await storageAdapter.storeEvents(testEvents);
 
       // First page
-      const firstResponse = await request(server)
-        .get('/api/v1/events')
-        .query({
-          appId: 'web-app',
-          from: '2026-01-08T00:00:00Z',
-          to: '2026-01-09T00:00:00Z',
-          limit: 5,
-        });
+      const firstResponse = await request(server).get('/api/v1/events').query({
+        appId: 'web-app',
+        from: '2026-01-08T00:00:00Z',
+        to: '2026-01-09T00:00:00Z',
+        limit: 5,
+      });
 
       expect(firstResponse.status).toBe(200);
       expect(firstResponse.body.items).toHaveLength(5);
@@ -341,19 +319,17 @@ describe('Query API Integration Tests', () => {
       const firstPageEventIds = firstResponse.body.items.map((e: StoredEvent) => e.eventId);
 
       // Second page
-      const secondResponse = await request(server)
-        .get('/api/v1/events')
-        .query({
-          appId: 'web-app',
-          from: '2026-01-08T00:00:00Z',
-          to: '2026-01-09T00:00:00Z',
-          limit: 5,
-          cursor: firstResponse.body.nextCursor,
-        });
+      const secondResponse = await request(server).get('/api/v1/events').query({
+        appId: 'web-app',
+        from: '2026-01-08T00:00:00Z',
+        to: '2026-01-09T00:00:00Z',
+        limit: 5,
+        cursor: firstResponse.body.nextCursor,
+      });
 
       expect(secondResponse.status).toBe(200);
       expect(secondResponse.body.items).toHaveLength(5);
-      
+
       const secondPageEventIds = secondResponse.body.items.map((e: StoredEvent) => e.eventId);
 
       // Verify no overlap between pages
@@ -362,14 +338,12 @@ describe('Query API Integration Tests', () => {
     });
 
     it('should return 400 for invalid cursor', async () => {
-      const response = await request(server)
-        .get('/api/v1/events')
-        .query({
-          appId: 'web-app',
-          from: '2026-01-08T00:00:00Z',
-          to: '2026-01-09T00:00:00Z',
-          cursor: 'invalid-cursor',
-        });
+      const response = await request(server).get('/api/v1/events').query({
+        appId: 'web-app',
+        from: '2026-01-08T00:00:00Z',
+        to: '2026-01-09T00:00:00Z',
+        cursor: 'invalid-cursor',
+      });
 
       expect(response.status).toBe(400);
       expect(response.body).toHaveProperty('error');
@@ -391,19 +365,17 @@ describe('Query API Integration Tests', () => {
 
       await storageAdapter.storeEvents([testEvent]);
 
-      const response = await request(server)
-        .get('/api/v1/events')
-        .query({
-          appId: 'web-app',
-          from: '2026-01-08T00:00:00Z',
-          to: '2026-01-09T00:00:00Z',
-        });
+      const response = await request(server).get('/api/v1/events').query({
+        appId: 'web-app',
+        from: '2026-01-08T00:00:00Z',
+        to: '2026-01-09T00:00:00Z',
+      });
 
       expect(response.status).toBe(200);
       expect(response.body.items).toHaveLength(1);
-      
+
       const returnedEvent = response.body.items[0];
-      
+
       // Verify canonical fields are present
       expect(returnedEvent).toHaveProperty('schemaVersion');
       expect(returnedEvent).toHaveProperty('eventId');
@@ -414,7 +386,7 @@ describe('Query API Integration Tests', () => {
       expect(returnedEvent).toHaveProperty('source');
       expect(returnedEvent).toHaveProperty('actor');
       expect(returnedEvent).toHaveProperty('properties');
-      
+
       // Verify internal fields are not exposed (if any were added)
       expect(returnedEvent).not.toHaveProperty('pk');
       expect(returnedEvent).not.toHaveProperty('sk');

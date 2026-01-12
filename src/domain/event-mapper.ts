@@ -3,17 +3,19 @@ import type { ApiEvent } from './api-event-types.js';
 
 /**
  * Map a stored event (with internal DB fields) to a public API event
- * 
+ *
  * This function strips all internal storage fields:
  * - DynamoDB keys: PK, SK, GSI1PK, GSI1SK, GSI2PK, GSI2SK
  * - Cosmos DB fields: id, pk, _rid, _self, _etag, _attachments, _ts
  * - TTL fields: expiresAt, ttl
  * - Internal metadata: processedAt (not part of public API spec)
- * 
+ *
  * @param storedEvent - Event from database (may contain internal fields)
  * @returns Clean API event with only documented fields
  */
-export function mapStoredEventToApiEvent(storedEvent: StoredEvent | (StoredEvent & Record<string, unknown>)): ApiEvent {
+export function mapStoredEventToApiEvent(
+  storedEvent: StoredEvent | (StoredEvent & Record<string, unknown>)
+): ApiEvent {
   // Extract only the canonical fields defined in the API spec
   const baseFields = {
     schemaVersion: storedEvent.schemaVersion,
@@ -53,7 +55,7 @@ export function mapStoredEventToApiEvent(storedEvent: StoredEvent | (StoredEvent
 
 /**
  * Map an array of stored events to API events
- * 
+ *
  * @param storedEvents - Array of events from database
  * @returns Array of clean API events
  */

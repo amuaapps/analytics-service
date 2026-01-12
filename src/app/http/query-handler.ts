@@ -15,7 +15,7 @@ export function createQueryHttpHandler(deps: QueryHttpHandlerDependencies) {
   return async (req: Request, res: Response): Promise<void> => {
     const { logger, storageAdapter } = deps;
     const requestId = req.id || 'unknown';
-    
+
     const requestLogger = createChildLogger(logger, {
       requestId,
       handler: 'query',

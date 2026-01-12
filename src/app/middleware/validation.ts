@@ -14,13 +14,7 @@ function sanitizeZodError(error: ZodError): unknown {
 }
 
 function sanitizeErrorMessage(message: string): string {
-  const sensitivePatterns = [
-    /password/gi,
-    /token/gi,
-    /secret/gi,
-    /key/gi,
-    /authorization/gi,
-  ];
+  const sensitivePatterns = [/password/gi, /token/gi, /secret/gi, /key/gi, /authorization/gi];
 
   for (const pattern of sensitivePatterns) {
     if (pattern.test(message)) {
@@ -33,24 +27,24 @@ function sanitizeErrorMessage(message: string): string {
 
 export function createValidationMiddleware(logger: Logger, limits: LimitsConfig) {
   const validateIngestRequestEnvelope = createValidateIngestRequestEnvelope(limits);
-  
+
   return (req: Request, res: Response, next: NextFunction): void => {
     const requestId = req.id ?? 'unknown';
-    
+
     try {
       const result = validateIngestRequestEnvelope(req.body);
 
       if (!result.success) {
         const sanitizedErrors = sanitizeZodError(result.error);
         const error = new ValidationError('Invalid request payload', sanitizedErrors);
-        
+
         sendErrorResponse(res, error, logger, requestId);
         return;
       }
 
       // Use normalized payload (sessionId canonicalized to context.sessionId)
       req.body = result.data;
-      
+
       logger.debug(
         {
           requestId,

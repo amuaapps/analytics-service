@@ -70,7 +70,7 @@ describe('Lambda HTTP Ingest - Invalid JSON Handling', () => {
 
     expect(response.statusCode).toBe(400);
     expect(response.headers?.['Content-Type']).toBe('application/json');
-    
+
     const body = JSON.parse(response.body);
     expect(body.error.code).toBe('VALIDATION_ERROR');
     expect(body.error.message).toContain('Missing request body');
@@ -114,7 +114,7 @@ describe('Lambda HTTP Ingest - Invalid JSON Handling', () => {
 
     expect(response.statusCode).toBe(400);
     expect(response.headers?.['Content-Type']).toBe('application/json');
-    
+
     const body = JSON.parse(response.body);
     expect(body.error.code).toBe('VALIDATION_ERROR');
     expect(body.error.message).toContain('Invalid JSON');
@@ -158,7 +158,7 @@ describe('Lambda HTTP Ingest - Invalid JSON Handling', () => {
 
     expect(response.statusCode).toBe(400);
     expect(response.headers?.['Content-Type']).toBe('application/json');
-    
+
     const body = JSON.parse(response.body);
     expect(body.error.code).toBe('VALIDATION_ERROR');
     expect(body.requestId).toBe('test-request-id-3');

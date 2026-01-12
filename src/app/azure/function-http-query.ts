@@ -95,9 +95,12 @@ function createErrorResponse(
   requestId?: string
 ): HttpResponseInit {
   const message = error instanceof Error ? error.message : 'Internal server error';
-  const code = status === 400 ? 'VALIDATION_ERROR'
-    : status === 401 ? 'AUTHENTICATION_ERROR'
-    : 'INTERNAL_SERVER_ERROR';
+  const code =
+    status === 400
+      ? 'VALIDATION_ERROR'
+      : status === 401
+        ? 'AUTHENTICATION_ERROR'
+        : 'INTERNAL_SERVER_ERROR';
 
   const body: {
     error: { code: string; message: string };
@@ -132,16 +135,20 @@ export function createAzureFunctionQueryHandler(deps: AzureFunctionQueryDependen
       return createSuccessResponse(result);
     } catch (error) {
       // Handle validation errors with 400 status
-      if (error instanceof Error && (
-        error.message.includes('Missing required query parameters') ||
-        error.message.includes('validation')
-      )) {
+      if (
+        error instanceof Error &&
+        (error.message.includes('Missing required query parameters') ||
+          error.message.includes('validation'))
+      ) {
         deps.logger.warn({ err: error, invocationId: requestId }, 'Query validation error');
         return createErrorResponse(error, 400, requestId);
       }
 
       // Handle other errors
-      deps.logger.error({ err: error, invocationId: requestId }, 'Azure Function query handler error');
+      deps.logger.error(
+        { err: error, invocationId: requestId },
+        'Azure Function query handler error'
+      );
       return createErrorResponse(error, 500, requestId);
     }
   };

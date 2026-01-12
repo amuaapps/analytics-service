@@ -65,10 +65,7 @@ export interface ErrorResponse {
   requestId?: string;
 }
 
-export function formatErrorResponse(
-  error: AppError | Error,
-  requestId?: string
-): ErrorResponse {
+export function formatErrorResponse(error: AppError | Error, requestId?: string): ErrorResponse {
   if (error instanceof AppError) {
     return {
       error: {

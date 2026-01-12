@@ -49,23 +49,19 @@ export async function handleProcessor(
       batchId,
       storageLocation,
     });
-    
-    batchLogger.info(
-      { eventCount: rawBatch.events.length },
-      'Raw batch fetched successfully'
-    );
+
+    batchLogger.info({ eventCount: rawBatch.events.length }, 'Raw batch fetched successfully');
   } catch (error) {
-    batchLogger.error(
-      { err: error, storageLocation },
-      'Failed to fetch raw batch from storage'
-    );
+    batchLogger.error({ err: error, storageLocation }, 'Failed to fetch raw batch from storage');
     return {
       processed: 0,
       failed: 0,
-      errors: [{ 
-        eventId: 'batch', 
-        error: `Failed to fetch raw batch: ${error instanceof Error ? error.message : 'Unknown error'}` 
-      }],
+      errors: [
+        {
+          eventId: 'batch',
+          error: `Failed to fetch raw batch: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        },
+      ],
     };
   }
 
@@ -84,7 +80,7 @@ export async function handleProcessor(
 
   // Defensive validation - do not assume ingest validated
   const validationResult = validateIngestRequestEnvelope({ schemaVersion: '1.0.0', events });
-  
+
   if (!validationResult.success) {
     // Poison message - log structured warning and reject without processing
     enrichedLogger.warn(
@@ -95,14 +91,16 @@ export async function handleProcessor(
       },
       'Batch failed validation - treating as poison message'
     );
-    
+
     return {
       processed: 0,
       failed: events.length,
-      errors: [{ 
-        eventId: 'batch', 
-        error: `Validation failed: ${validationResult.error.issues[0]?.message || 'Invalid batch format'}` 
-      }],
+      errors: [
+        {
+          eventId: 'batch',
+          error: `Validation failed: ${validationResult.error.issues[0]?.message || 'Invalid batch format'}`,
+        },
+      ],
     };
   }
 

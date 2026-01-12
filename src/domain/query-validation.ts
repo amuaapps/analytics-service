@@ -32,7 +32,10 @@ function preprocessQueryInput(input: unknown): unknown {
   // Normalize types: handle comma-separated string or array
   if (data.types !== undefined && data.types !== null) {
     if (typeof data.types === 'string') {
-      processed.types = data.types.split(',').map((t) => t.trim()).filter((t) => t.length > 0);
+      processed.types = data.types
+        .split(',')
+        .map((t) => t.trim())
+        .filter((t) => t.length > 0);
     } else if (Array.isArray(data.types)) {
       processed.types = data.types;
     }
@@ -41,7 +44,10 @@ function preprocessQueryInput(input: unknown): unknown {
   // Normalize names: handle comma-separated string or array
   if (data.names !== undefined && data.names !== null) {
     if (typeof data.names === 'string') {
-      processed.names = data.names.split(',').map((n) => n.trim()).filter((n) => n.length > 0);
+      processed.names = data.names
+        .split(',')
+        .map((n) => n.trim())
+        .filter((n) => n.length > 0);
     } else if (Array.isArray(data.names)) {
       processed.names = data.names;
     }
@@ -71,17 +77,11 @@ export const queryEventsInputSchema = z
     types: z
       .array(eventTypeSchema)
       .optional()
-      .refine(
-        (types) => !types || types.length > 0,
-        'types array must not be empty if provided'
-      ),
+      .refine((types) => !types || types.length > 0, 'types array must not be empty if provided'),
     names: z
       .array(z.string().min(1))
       .optional()
-      .refine(
-        (names) => !names || names.length > 0,
-        'names array must not be empty if provided'
-      ),
+      .refine((names) => !names || names.length > 0, 'names array must not be empty if provided'),
     userId: z.string().min(1).optional(),
     anonymousId: z.string().min(1).optional(),
     sessionId: z.string().min(1).optional(),
@@ -122,10 +122,10 @@ export const queryEventsInputSchema = z
 export function validateQueryEventsInput(input: unknown): QueryEventsInput {
   // Preprocess to normalize HTTP query params (strings, comma-separated values, etc.)
   const preprocessed = preprocessQueryInput(input);
-  
+
   // Validate with Zod schema
   const validated = queryEventsInputSchema.parse(preprocessed);
-  
+
   return {
     ...validated,
     limit: validated.limit ?? DEFAULT_QUERY_LIMIT,

@@ -17,9 +17,8 @@ async function fetchAwsSecret(secretArn: string): Promise<string> {
   }
 
   // Lazy load AWS SDK to avoid cold start penalty when not needed
-  const { SecretsManagerClient, GetSecretValueCommand } = await import(
-    '@aws-sdk/client-secrets-manager'
-  );
+  const { SecretsManagerClient, GetSecretValueCommand } =
+    await import('@aws-sdk/client-secrets-manager');
 
   const client = new SecretsManagerClient({});
   const command = new GetSecretValueCommand({ SecretId: secretArn });
@@ -44,16 +43,14 @@ async function fetchAwsSecret(secretArn: string): Promise<string> {
 
 /**
  * Load analytics write key from cloud secret store
- * 
+ *
  * AWS: Fetches from Secrets Manager using ARN from env var
  * Azure: Uses Key Vault reference (automatically resolved by Azure Functions runtime)
- * 
+ *
  * @param cloudProvider - The cloud provider ('aws' or 'azure')
  * @returns The analytics write key
  */
-export async function loadAnalyticsWriteKey(
-  cloudProvider: CloudProvider
-): Promise<string> {
+export async function loadAnalyticsWriteKey(cloudProvider: CloudProvider): Promise<string> {
   if (cloudProvider === 'aws') {
     // AWS: Fetch from Secrets Manager
     const secretArn = getOptionalEnvVar('ANALYTICS_WRITE_KEY_SECRET_ARN');

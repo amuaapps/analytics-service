@@ -52,7 +52,7 @@ export class InMemoryRawStorage implements RawEventStore {
 
   async getRawBatch(pointer: RawBatchPointer): Promise<RawBatch> {
     const batch = this.batches.get(pointer.batchId);
-    
+
     if (!batch) {
       this.logger.error(
         { batchId: pointer.batchId, storageLocation: pointer.storageLocation },

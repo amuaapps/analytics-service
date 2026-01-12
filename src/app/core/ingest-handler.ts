@@ -36,7 +36,7 @@ export async function handleIngest(
   try {
     // Step 1: Store raw batch in immutable storage (S3/Blob)
     batchLogger.info('Storing raw batch in immutable storage');
-    
+
     const pointer = await rawStorage.storeRawBatch({
       batchId,
       requestId,
@@ -44,10 +44,7 @@ export async function handleIngest(
       events: payload.events,
     });
 
-    batchLogger.info(
-      { storageLocation: pointer.storageLocation },
-      'Raw batch stored successfully'
-    );
+    batchLogger.info({ storageLocation: pointer.storageLocation }, 'Raw batch stored successfully');
 
     // Step 2: Enqueue lightweight pointer message
     batchLogger.info('Enqueuing pointer message for processing');

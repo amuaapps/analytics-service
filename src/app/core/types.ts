@@ -44,11 +44,11 @@ export interface CoreProcessorResponse {
 
 /**
  * Adapter interfaces have been moved to src/infra/interfaces.ts
- * 
+ *
  * Use these canonical ports:
  * - QueuePublisher (was QueueAdapter)
  * - EventRepository (was OperationalStorageAdapter)
  * - RawEventStore (was RawStorageAdapter)
- * 
+ *
  * @deprecated Import from '../../infra/interfaces.js' instead
  */

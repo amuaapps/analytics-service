@@ -10,7 +10,7 @@ export interface SQSQueuePublisherConfig {
 
 /**
  * SQS implementation of QueuePublisher
- * 
+ *
  * Assumptions:
  * - Queue is configured with appropriate visibility timeout (e.g., 5 minutes)
  * - Dead-letter queue (DLQ) is configured for poison messages

@@ -19,12 +19,12 @@ export function validateWriteKey(providedKey: string, validKeys: string[]): bool
   }
 
   const trimmedKey = providedKey.trim();
-  
+
   return validKeys.some((validKey) => {
     if (validKey.length !== trimmedKey.length) {
       return false;
     }
-    
+
     let matches = true;
     for (let i = 0; i < validKey.length; i++) {
       if (validKey.charCodeAt(i) !== trimmedKey.charCodeAt(i)) {

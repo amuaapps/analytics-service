@@ -262,7 +262,10 @@ describe('Logger Module', () => {
       const sanitized = sanitizeLogContext(context);
 
       expect(sanitized.requestId).toBe('req-123');
-      const level3 = (sanitized.level1 as Record<string, unknown>).level2 as Record<string, unknown>;
+      const level3 = (sanitized.level1 as Record<string, unknown>).level2 as Record<
+        string,
+        unknown
+      >;
       const level3Data = level3.level3 as Record<string, unknown>;
       expect(level3Data.password).toBe('[REDACTED]');
       expect(level3Data.safeField).toBe('safe-value');

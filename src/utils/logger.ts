@@ -42,7 +42,6 @@ const PII_FIELDS = [
   'ip',
 ];
 
-
 function sanitizeObject(obj: Record<string, unknown>): Record<string, unknown> {
   const sanitized: Record<string, unknown> = {};
 
@@ -134,10 +133,7 @@ export function createLogger(options: CreateLoggerOptions): PinoLogger {
   return pino(pinoConfig);
 }
 
-export function createChildLogger(
-  parentLogger: PinoLogger,
-  context: LogContext
-): PinoLogger {
+export function createChildLogger(parentLogger: PinoLogger, context: LogContext): PinoLogger {
   const sanitizedContext = sanitizeLogContext(context);
   return parentLogger.child(sanitizedContext);
 }

@@ -11,7 +11,7 @@ export interface S3RawEventStoreConfig {
 
 /**
  * S3 implementation of RawEventStore
- * 
+ *
  * Object key structure: {keyPrefix}{appId}/{year}/{month}/{day}/{batchId}_{timestamp}.json
  * This allows for efficient partitioning and lifecycle policies
  */
@@ -69,10 +69,7 @@ export class S3RawEventStore implements RawEventStore {
         storageLocation: key,
       };
     } catch (error) {
-      this.logger.error(
-        { err: error, batchId: batch.batchId },
-        'Failed to store raw batch in S3'
-      );
+      this.logger.error({ err: error, batchId: batch.batchId }, 'Failed to store raw batch in S3');
       throw error;
     }
   }
@@ -121,17 +118,17 @@ export class S3RawEventStore implements RawEventStore {
   private generateKey(batch: RawBatch): string {
     // Extract appId from first event (all events in batch should have same appId)
     const appId = batch.events[0]?.source?.appId || 'unknown';
-    
+
     // Parse receivedAt to create date-based partitioning
     const date = new Date(batch.receivedAt);
     const year = date.getUTCFullYear();
     const month = String(date.getUTCMonth() + 1).padStart(2, '0');
     const day = String(date.getUTCDate()).padStart(2, '0');
-    
+
     // Create unique filename with timestamp
     const timestamp = date.getTime();
     const filename = `${batch.batchId}_${timestamp}.json`;
-    
+
     // Construct full key: prefix/appId/year/month/day/filename
     return `${this.keyPrefix}${appId}/${year}/${month}/${day}/${filename}`;
   }

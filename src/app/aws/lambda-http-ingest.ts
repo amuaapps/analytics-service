@@ -38,17 +38,17 @@ function parseBody(event: APIGatewayProxyEvent): unknown {
 
 function validateAndParseBody(event: APIGatewayProxyEvent): IngestRequestEnvelope {
   const body = parseBody(event);
-  
+
   // Validate with Zod schema
   const result = validateIngestRequest(body);
-  
+
   if (!result.success) {
     // Create validation error with structured details
     const validationError = new Error('VALIDATION_ERROR') as Error & { zodError: ZodError };
     validationError.zodError = result.error;
     throw validationError;
   }
-  
+
   // Type assertion: Zod validation ensures this matches IngestRequestEnvelope
   return result.data as IngestRequestEnvelope;
 }
@@ -63,7 +63,11 @@ function createCoreRequest(event: APIGatewayProxyEvent): CoreIngestRequest {
   };
 }
 
-function createSuccessResponse(result: { accepted: boolean; eventCount: number; batchId: string }): APIGatewayProxyResult {
+function createSuccessResponse(result: {
+  accepted: boolean;
+  eventCount: number;
+  batchId: string;
+}): APIGatewayProxyResult {
   return {
     statusCode: 202,
     headers: {
@@ -82,11 +86,16 @@ function createErrorResponse(
   statusCode: number = 500,
   requestId?: string
 ): APIGatewayProxyResult {
-  const message = error instanceof Error ? error.message.replace(/^[A-Z_]+:\s*/, '') : 'Internal server error';
-  const code = statusCode === 400 ? 'VALIDATION_ERROR' 
-    : statusCode === 401 ? 'AUTHENTICATION_ERROR'
-    : statusCode === 413 ? 'PAYLOAD_TOO_LARGE'
-    : 'INTERNAL_SERVER_ERROR';
+  const message =
+    error instanceof Error ? error.message.replace(/^[A-Z_]+:\s*/, '') : 'Internal server error';
+  const code =
+    statusCode === 400
+      ? 'VALIDATION_ERROR'
+      : statusCode === 401
+        ? 'AUTHENTICATION_ERROR'
+        : statusCode === 413
+          ? 'PAYLOAD_TOO_LARGE'
+          : 'INTERNAL_SERVER_ERROR';
 
   const body: {
     error: { code: string; message: string; details?: unknown };
@@ -130,7 +139,10 @@ export function createLambdaIngestHandler(deps: LambdaIngestDependencies) {
       return createSuccessResponse(result);
     } catch (error) {
       // Handle validation errors with 400 status
-      if (error instanceof Error && (error.message === 'VALIDATION_ERROR' || error.message.startsWith('VALIDATION_ERROR:'))) {
+      if (
+        error instanceof Error &&
+        (error.message === 'VALIDATION_ERROR' || error.message.startsWith('VALIDATION_ERROR:'))
+      ) {
         deps.logger.warn({ err: error, requestId }, 'Validation error at ingress');
         return createErrorResponse(error, 400, requestId);
       }

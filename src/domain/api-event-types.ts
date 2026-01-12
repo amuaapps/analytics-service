@@ -2,7 +2,7 @@ import type { Actor, Context, EventType, Source } from './base-types.js';
 
 /**
  * Public API Event Types
- * 
+ *
  * These types represent the canonical event structure returned by the API.
  * They exclude all internal storage fields (PK, SK, GSI keys, TTL, processedAt, etc.)
  * and only include fields documented in the public API specification.

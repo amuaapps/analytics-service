@@ -16,9 +16,7 @@ describe('Correlation Module', () => {
 
       expect(requestId).toBeDefined();
       expect(typeof requestId).toBe('string');
-      expect(requestId).toMatch(
-        /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-      );
+      expect(requestId).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i);
     });
 
     it('should generate unique IDs', () => {
@@ -38,9 +36,7 @@ describe('Correlation Module', () => {
 
       expect(batchId).toBeDefined();
       expect(typeof batchId).toBe('string');
-      expect(batchId).toMatch(
-        /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-      );
+      expect(batchId).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i);
     });
 
     it('should generate unique IDs', () => {
@@ -122,9 +118,7 @@ describe('Correlation Module', () => {
       const result = getOrGenerateRequestId('invalid');
 
       expect(result).toBeDefined();
-      expect(result).toMatch(
-        /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-      );
+      expect(result).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i);
       expect(result).not.toBe('invalid');
     });
 
@@ -132,18 +126,14 @@ describe('Correlation Module', () => {
       const result = getOrGenerateRequestId(undefined);
 
       expect(result).toBeDefined();
-      expect(result).toMatch(
-        /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-      );
+      expect(result).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i);
     });
 
     it('should generate new UUID for empty header', () => {
       const result = getOrGenerateRequestId('');
 
       expect(result).toBeDefined();
-      expect(result).toMatch(
-        /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-      );
+      expect(result).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i);
     });
   });
 
