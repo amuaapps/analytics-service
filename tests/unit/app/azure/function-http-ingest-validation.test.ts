@@ -7,7 +7,7 @@ import { loadLimitsConfig } from '../../../../src/config/limits.js';
 
 // Mock auth middleware
 jest.mock('../../../../src/app/azure/auth-middleware.js', () => ({
-  validateWriteKey: jest.fn().mockResolvedValue({ valid: true }),
+  validateWriteKey: (jest.fn() as any).mockResolvedValue({ valid: true }),
 }));
 
 describe('Azure Function HTTP Ingest - Invalid JSON Handling', () => {
@@ -46,7 +46,7 @@ describe('Azure Function HTTP Ingest - Invalid JSON Handling', () => {
       method: 'POST',
       url: 'https://example.com/v1/ingest',
       headers: new Map([['x-analytics-write-key', 'test-key']]),
-      text: jest.fn().mockResolvedValue(''), // Empty body
+      text: (jest.fn() as any).mockResolvedValue(''), // Empty body
     } as unknown as HttpRequest;
 
     const context = {
@@ -69,7 +69,7 @@ describe('Azure Function HTTP Ingest - Invalid JSON Handling', () => {
       method: 'POST',
       url: 'https://example.com/v1/ingest',
       headers: new Map([['x-analytics-write-key', 'test-key']]),
-      text: jest.fn().mockResolvedValue('{ invalid json }'), // Invalid JSON
+      text: (jest.fn() as any).mockResolvedValue('{ invalid json }'), // Invalid JSON
     } as unknown as HttpRequest;
 
     const context = {
@@ -92,7 +92,7 @@ describe('Azure Function HTTP Ingest - Invalid JSON Handling', () => {
       method: 'POST',
       url: 'https://example.com/v1/ingest',
       headers: new Map([['x-analytics-write-key', 'test-key']]),
-      text: jest.fn().mockResolvedValue('{"events": [],}'), // Trailing comma
+      text: (jest.fn() as any).mockResolvedValue('{"events": [],}'), // Trailing comma
     } as unknown as HttpRequest;
 
     const context = {
@@ -115,7 +115,7 @@ describe('Azure Function HTTP Ingest - Invalid JSON Handling', () => {
       method: 'POST',
       url: 'https://example.com/v1/ingest',
       headers: new Map([['x-analytics-write-key', 'test-key']]),
-      text: jest.fn().mockResolvedValue(null), // Null body
+      text: (jest.fn() as any).mockResolvedValue(null), // Null body
     } as unknown as HttpRequest;
 
     const context = {
@@ -137,7 +137,7 @@ describe('Azure Function HTTP Ingest - Invalid JSON Handling', () => {
       method: 'POST',
       url: 'https://example.com/v1/ingest',
       headers: new Map([['x-analytics-write-key', 'test-key']]),
-      text: jest.fn().mockResolvedValue(''),
+      text: (jest.fn() as any).mockResolvedValue(''),
     } as unknown as HttpRequest;
 
     const context = {
