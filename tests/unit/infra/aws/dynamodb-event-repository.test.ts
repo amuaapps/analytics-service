@@ -1,24 +1,46 @@
-import { describe, it, expect, beforeEach, jest } from '@jest/globals';
-import { DynamoDBEventRepository } from '../../../../src/infra/aws/dynamodb-event-repository.js';
-import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
-import { marshall } from '@aws-sdk/util-dynamodb';
+import { describe, it, expect, beforeEach, jest, beforeAll } from '@jest/globals';
 import type { Logger } from '../../../../src/utils/logger.js';
 import type { QueryEventsInput } from '../../../../src/domain/query-types.js';
 
-// Mock AWS SDK
-jest.mock('@aws-sdk/client-dynamodb');
-jest.mock('@aws-sdk/util-dynamodb');
+// Strategy #3: Simple inline mock with proper setup
+const mockSend = jest.fn();
 
-const MockedDynamoDBClient = jest.mocked(DynamoDBClient);
-const mockedMarshall = jest.mocked(marshall);
+// Set up environment to prevent AWS credential loading
+beforeAll(() => {
+  process.env.AWS_ACCESS_KEY_ID = 'test';
+  process.env.AWS_SECRET_ACCESS_KEY = 'test';
+  process.env.AWS_REGION = 'us-east-1';
+});
+
+jest.mock('@aws-sdk/client-dynamodb', () => {
+  class MockDynamoDBClient {
+    send = mockSend;
+  }
+  class MockQueryCommand {
+    constructor(public input: any) {}
+  }
+  return {
+    DynamoDBClient: MockDynamoDBClient,
+    QueryCommand: MockQueryCommand,
+    PutItemCommand: class {
+      constructor(public input: any) {}
+    },
+  };
+});
+
+jest.mock('@aws-sdk/util-dynamodb', () => ({
+  marshall: (obj: any) => obj,
+  unmarshall: (obj: any) => obj,
+}));
+
+import { DynamoDBEventRepository } from '../../../../src/infra/aws/dynamodb-event-repository.js';
 
 describe('DynamoDBEventRepository - Query Logic', () => {
   let repository: DynamoDBEventRepository;
-  let mockSend: jest.Mock;
   let mockLogger: any;
 
   beforeEach(() => {
-    jest.clearAllMocks();
+    mockSend.mockClear();
 
     mockLogger = {
       info: jest.fn(),
@@ -26,17 +48,6 @@ describe('DynamoDBEventRepository - Query Logic', () => {
       error: jest.fn(),
       debug: jest.fn(),
     } as unknown as jest.Mocked<Logger>;
-
-    mockSend = jest.fn();
-
-    MockedDynamoDBClient.mockImplementation(
-      () =>
-        ({
-          send: mockSend,
-        }) as any
-    );
-
-    mockedMarshall.mockImplementation((obj: any) => obj);
 
     repository = new DynamoDBEventRepository({
       tableName: 'test-table',
