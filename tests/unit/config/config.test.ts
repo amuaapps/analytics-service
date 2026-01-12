@@ -51,7 +51,7 @@ describe('Configuration Module', () => {
       expect(config.service.env).toBe('dev');
       expect(config.service.logLevel).toBe('debug');
       expect(config.security.corsAllowedOrigins).toEqual(['*']);
-      expect(config.limits.maxEventsPerBatch).toBe(50);
+      expect(config.limits.maxEventsPerBatch).toBe(100);
       expect(config.limits.maxQueryLimit).toBe(200);
     });
 
@@ -59,7 +59,9 @@ describe('Configuration Module', () => {
       delete process.env.ANALYTICS_WRITE_KEY;
 
       await expect(loadConfig()).rejects.toThrow(ConfigurationError);
-      await expect(loadConfig()).rejects.toThrow('Analytics write key not configured');
+      await expect(loadConfig()).rejects.toThrow(
+        'Missing required environment variable: ANALYTICS_WRITE_KEY'
+      );
     });
 
     it('should validate NODE_ENV values', async () => {
@@ -173,7 +175,7 @@ describe('Configuration Module', () => {
 
       const config = await loadConfig();
 
-      expect(config.limits.maxEventsPerBatch).toBe(50);
+      expect(config.limits.maxEventsPerBatch).toBe(100);
       expect(config.limits.minEventsPerBatch).toBe(1);
       expect(config.limits.maxPropertyDepth).toBe(3);
       expect(config.limits.maxKeysPerLevel).toBe(50);
@@ -290,7 +292,7 @@ describe('Configuration Module', () => {
 
       await expect(loadConfig()).rejects.toThrow(ConfigurationError);
       await expect(loadConfig()).rejects.toThrow(
-        'Missing required environment variable: AZURE_COSMOS_ENDPOINT'
+        'Missing required environment variable: AZURE_COSMOS_CONNECTION_STRING'
       );
     });
   });

@@ -28,9 +28,7 @@ describe('DynamoDBEventRepository - Query Logic', () => {
       send: jest.fn(),
     } as unknown as jest.Mocked<DynamoDBClient>;
 
-    (DynamoDBClient as jest.MockedClass<typeof DynamoDBClient>).mockImplementation(
-      () => mockClient
-    );
+    (DynamoDBClient as any).mockImplementation(() => mockClient);
     (marshall as jest.Mock).mockImplementation((obj) => obj as any);
 
     repository = new DynamoDBEventRepository({

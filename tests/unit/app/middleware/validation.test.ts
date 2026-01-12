@@ -180,8 +180,10 @@ describe('Validation Middleware', () => {
       expect(statusMock).toHaveBeenCalledWith(400);
       expect(jsonMock).toHaveBeenCalledWith(
         expect.objectContaining({
-          error: 'Bad Request',
-          message: 'Invalid request payload',
+          error: expect.objectContaining({
+            code: 'VALIDATION_ERROR',
+            message: 'Invalid request payload',
+          }),
         })
       );
       expect(mockNext).not.toHaveBeenCalled();
@@ -379,13 +381,13 @@ describe('Validation Middleware', () => {
     });
 
     it('should reject batch exceeding max events', () => {
-      const events = Array.from({ length: 51 }, (_, i) => ({
+      const events = Array.from({ length: 101 }, (_, i) => ({
         schemaVersion: SCHEMA_VERSION,
         eventId: `550e8400-e29b-41d4-a716-44665544${String(i).padStart(4, '0')}`,
-        type: 'track' as const,
+        type: 'track',
         name: 'test.event',
-        occurredAt: '2026-01-07T20:00:00Z',
-        source: { appId: 'app', platform: 'web' as const, env: 'prod' as const },
+        occurredAt: '2026-01-08T06:00:00Z',
+        source: { appId: 'test-app', platform: 'web', env: 'prod' },
         actor: { userId: 'user-1' },
       }));
 

@@ -64,7 +64,19 @@ describe('Core Query Handler', () => {
         storageAdapter: mockStorageAdapter,
       });
 
-      expect(result.events).toEqual(mockEvents);
+      // Query handler returns events without processedAt (stripped by mapper)
+      expect(result.events).toEqual([
+        {
+          schemaVersion: SCHEMA_VERSION,
+          eventId: '550e8400-e29b-41d4-a716-446655440000',
+          type: 'track',
+          name: 'button.clicked',
+          occurredAt: '2026-01-08T06:00:00Z',
+          source: { appId: 'web-storefront', platform: 'web', env: 'prod' },
+          actor: { userId: 'user-123' },
+          receivedAt: '2026-01-08T06:00:01Z',
+        },
+      ]);
       expect(result.hasMore).toBe(false);
       expect(mockStorageAdapter.queryEvents).toHaveBeenCalledWith(request.input);
     });

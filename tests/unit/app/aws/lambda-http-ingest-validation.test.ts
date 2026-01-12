@@ -1,3 +1,4 @@
+import { jest } from '@jest/globals';
 import type { APIGatewayProxyEvent, Context } from 'aws-lambda';
 import { createLambdaIngestHandler } from '../../../../src/app/aws/lambda-http-ingest.js';
 import type { Logger } from '../../../../src/utils/logger.js';

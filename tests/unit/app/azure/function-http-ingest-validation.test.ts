@@ -1,3 +1,4 @@
+import { jest } from '@jest/globals';
 import type { HttpRequest, InvocationContext } from '@azure/functions';
 import { createAzureFunctionIngestHandler } from '../../../../src/app/azure/function-http-ingest.js';
 import type { Logger } from '../../../../src/utils/logger.js';
