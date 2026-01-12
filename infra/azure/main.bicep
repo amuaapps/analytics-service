@@ -80,8 +80,6 @@ var uniqueSuffix = uniqueString(resourceGroup().id, projectName, environment)
 // Resource names
 var cosmosDbAccountName = '${projectName}-cosmos-${environment}'
 var storageAccountName = toLower('${projectName}st${environment}${take(uniqueSuffix, 6)}')
-var functionAppName = '${projectName}-func-${environment}'
-var appServicePlanName = '${projectName}-plan-${environment}'
 var keyVaultName = '${projectName}-kv-${take(uniqueSuffix, 6)}'
 var applicationInsightsName = '${projectName}-ai-${environment}'
 var logAnalyticsWorkspaceName = '${projectName}-law-${environment}'
@@ -157,7 +155,6 @@ module functionApp 'modules/functionapp.bicep' = {
     maxQueryLimit: maxQueryLimit
     corsAllowedOrigins: corsAllowedOrigins
     logLevel: logLevel
-    environment: environment
     tags: tags
   }
 }

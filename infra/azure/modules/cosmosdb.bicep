@@ -4,9 +4,6 @@ param accountName string
 @description('Location for resources')
 param location string
 
-@description('Throughput (RU/s)')
-param throughput int = 400
-
 @description('Enable autoscale')
 param enableAutoscale bool = true
 
