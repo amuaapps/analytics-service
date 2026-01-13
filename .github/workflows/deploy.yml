@@ -544,12 +544,6 @@ jobs:
               "logLevel": {
                 "value": "${{ vars.LOG_LEVEL || (needs.setup.outputs.environment == 'prod' && 'info' || 'debug') }}"
               },
-              "cosmosDbThroughput": {
-                "value": ${{ vars.AZURE_COSMOS_THROUGHPUT || 400 }}
-              },
-              "cosmosDbAutoscale": {
-                "value": ${{ vars.AZURE_COSMOS_AUTOSCALE || 'true' }}
-              },
               "eventRetentionDays": {
                 "value": ${{ vars.EVENT_RETENTION_DAYS || 90 }}
               },

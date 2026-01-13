@@ -28,9 +28,6 @@ param corsAllowedOrigins string = '*'
 ])
 param logLevel string = 'info'
 
-@description('Enable Cosmos DB autoscale')
-param cosmosDbAutoscale bool = true
-
 @description('Event retention in days (TTL) - 12 months per retention policy')
 param eventRetentionDays int = 365
 
