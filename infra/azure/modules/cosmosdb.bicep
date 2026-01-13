@@ -4,9 +4,6 @@ param accountName string
 @description('Location for resources')
 param location string
 
-@description('Enable autoscale')
-param enableAutoscale bool = true
-
 @description('Default TTL in seconds (12 months = 365 days)')
 param defaultTtl int = 31536000 // 365 days = 12 months
 

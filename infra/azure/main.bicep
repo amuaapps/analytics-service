@@ -28,11 +28,6 @@ param corsAllowedOrigins string = '*'
 ])
 param logLevel string = 'info'
 
-@description('Cosmos DB throughput (RU/s)')
-@minValue(400)
-@maxValue(100000)
-param cosmosDbThroughput int = 400
-
 @description('Enable Cosmos DB autoscale')
 param cosmosDbAutoscale bool = true
 
@@ -79,7 +74,7 @@ var uniqueSuffix = uniqueString(resourceGroup().id, projectName, environment)
 
 // Resource names
 var cosmosDbAccountName = '${projectName}-cosmos-${environment}'
-var storageAccountName = toLower('${projectName}st${environment}${take(uniqueSuffix, 6)}')
+var storageAccountName = toLower('${take(projectName, 8)}st${take(environment, 3)}${take(uniqueSuffix, 8)}')
 var keyVaultName = '${projectName}-kv-${take(uniqueSuffix, 6)}'
 var applicationInsightsName = '${projectName}-ai-${environment}'
 var logAnalyticsWorkspaceName = '${projectName}-law-${environment}'
@@ -90,7 +85,6 @@ module cosmosDb 'modules/cosmosdb.bicep' = {
   params: {
     accountName: cosmosDbAccountName
     location: location
-    enableAutoscale: cosmosDbAutoscale
     defaultTtl: eventRetentionDays * 86400 // Convert days to seconds
     tags: tags
   }
