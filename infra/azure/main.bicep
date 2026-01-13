@@ -16,6 +16,9 @@ param projectName string = 'analytics-service'
 @secure()
 param analyticsWriteKey string
 
+@description('Object ID of deployer for Key Vault access (optional - leave empty to skip access policy)')
+param deployerObjectId string = ''
+
 @description('Comma-separated CORS allowed origins')
 param corsAllowedOrigins string = '*'
 
