@@ -90,7 +90,6 @@ module cosmosDb 'modules/cosmosdb.bicep' = {
   params: {
     accountName: cosmosDbAccountName
     location: location
-    throughput: cosmosDbThroughput
     enableAutoscale: cosmosDbAutoscale
     defaultTtl: eventRetentionDays * 86400 // Convert days to seconds
     tags: tags
@@ -134,27 +133,28 @@ module appInsights 'modules/appinsights.bicep' = {
 module functionApp 'modules/functionapp.bicep' = {
   name: 'functionapp-deployment'
   params: {
-    projectName: projectName
-    environment: environment
+    functionAppName: '${projectName}-func-${environment}'
+    appServicePlanName: '${projectName}-plan-${environment}'
     location: location
+    sku: functionAppSku
     storageAccountName: storage.outputs.storageAccountName
-    appInsightsConnectionString: appInsights.outputs.connectionString
-    appInsightsInstrumentationKey: appInsights.outputs.instrumentationKey
-    keyVaultSecretUri: keyVault.outputs.analyticsWriteKeySecretUri
-    keyVaultName: keyVault.outputs.keyVaultName
+    storageAccountKey: storage.outputs.storageAccountKey
     cosmosDbConnectionString: cosmosDb.outputs.connectionString
     cosmosDbDatabaseName: cosmosDb.outputs.databaseName
     cosmosDbContainerName: cosmosDb.outputs.containerName
     queueConnectionString: storage.outputs.queueConnectionString
     queueName: storage.outputs.queueName
-    blobConnectionString: storage.outputs.blobConnectionString
     blobContainerName: storage.outputs.blobContainerName
-    sku: functionAppSku
+    keyVaultName: keyVault.outputs.keyVaultName
+    applicationInsightsConnectionString: appInsights.outputs.connectionString
+    applicationInsightsInstrumentationKey: appInsights.outputs.instrumentationKey
+    keyVaultSecretUri: keyVault.outputs.analyticsWriteKeySecretUri
+    corsAllowedOrigins: corsAllowedOrigins
+    logLevel: logLevel
     maxPayloadSizeBytes: maxPayloadSizeBytes
     maxEventsPerBatch: maxEventsPerBatch
     maxQueryLimit: maxQueryLimit
-    corsAllowedOrigins: corsAllowedOrigins
-    logLevel: logLevel
+    environment: environment
     tags: tags
   }
 }
