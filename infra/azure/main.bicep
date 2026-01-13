@@ -75,7 +75,7 @@ var uniqueSuffix = uniqueString(resourceGroup().id, projectName, environment)
 // Resource names
 var cosmosDbAccountName = '${projectName}-cosmos-${environment}'
 var storageAccountName = toLower('${take(projectName, 8)}st${take(environment, 3)}${take(uniqueSuffix, 8)}')
-var keyVaultName = '${take(projectName, 10)}-kv-${take(uniqueSuffix, 8)}'
+var keyVaultName = toLower('${replace(take(projectName, 10), '-', '')}kv${take(uniqueSuffix, 10)}')
 var applicationInsightsName = '${projectName}-ai-${environment}'
 var logAnalyticsWorkspaceName = '${projectName}-law-${environment}'
 
