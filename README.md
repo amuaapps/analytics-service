@@ -169,6 +169,23 @@ See [docs/QUICK_START.md](docs/QUICK_START.md) for more details.
 - Terraform >= 1.5.0 (for AWS infrastructure)
 - Azure CLI + Bicep (for Azure infrastructure)
 
+**For Azure Deployment (One-Time Setup):**
+
+Before deploying to Azure, you must register the following resource providers in your Azure subscription. This is a one-time requirement per subscription:
+
+```bash
+az provider register --namespace Microsoft.KeyVault
+az provider register --namespace Microsoft.Storage
+az provider register --namespace Microsoft.OperationalInsights
+az provider register --namespace Microsoft.DocumentDB
+az provider register --namespace Microsoft.Web
+az provider register --namespace Microsoft.Insights
+```
+
+Alternatively, register via Azure Portal: **Subscriptions** → **Resource providers** → Search and register each provider.
+
+**Note:** Registration typically takes 1-2 minutes. The deployment pipeline will automatically check for these providers and fail with clear instructions if any are missing.
+
 ## API Documentation
 
 ### Authentication

@@ -464,15 +464,6 @@ jobs:
           tenant-id: ${{ vars.AZURE_TENANT_ID }}
           subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
 
-      - name: Setup Bicep
-        run: az bicep install
-
-      - name: Download deployment artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: deployment-package-azure
-          path: ./dist
-
       - name: Check Azure resource providers
         run: |
           echo "Checking required Azure resource providers..."
@@ -502,21 +493,31 @@ jobs:
           
           if [ ${#MISSING_PROVIDERS[@]} -gt 0 ]; then
             echo ""
-            echo "❌ ERROR: The following resource providers are not registered:"
+            echo "❌ ERROR: The following resource providers are not registered in your Azure subscription:"
             printf '  - %s\n' "${MISSING_PROVIDERS[@]}"
             echo ""
-            echo "To register these providers, run the following commands with an account that has subscription-level permissions:"
+            echo "This is a one-time setup requirement. To register these providers, run:"
             echo ""
             for provider in "${MISSING_PROVIDERS[@]}"; do
               echo "  az provider register --namespace $provider"
             done
             echo ""
-            echo "Or register them via Azure Portal: Subscriptions → Resource providers"
+            echo "Or register via Azure Portal: Subscriptions → Resource providers"
+            echo "See README.md for more details on Azure setup requirements."
             exit 1
           fi
           
           echo ""
           echo "✓ All required resource providers are registered"
+
+      - name: Setup Bicep
+        run: az bicep install
+
+      - name: Download deployment artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: deployment-package-azure
+          path: ./dist
 
       - name: Generate parameters JSON
         run: |
