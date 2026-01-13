@@ -171,7 +171,9 @@ See [docs/QUICK_START.md](docs/QUICK_START.md) for more details.
 
 **For Azure Deployment (One-Time Setup):**
 
-Before deploying to Azure, you must register the following resource providers in your Azure subscription. This is a one-time requirement per subscription:
+Before deploying to Azure, you must complete the following setup steps:
+
+**1. Register Resource Providers:**
 
 ```bash
 az provider register --namespace Microsoft.KeyVault
@@ -185,6 +187,21 @@ az provider register --namespace Microsoft.Insights
 Alternatively, register via Azure Portal: **Subscriptions** → **Resource providers** → Search and register each provider.
 
 **Note:** Registration typically takes 1-2 minutes. The deployment pipeline will automatically check for these providers and fail with clear instructions if any are missing.
+
+**2. Function App Quota:**
+
+The default deployment uses **Elastic Premium (EP1)** SKU. If your subscription doesn't have quota for this SKU, you have two options:
+
+- **Option A (Recommended):** Request quota increase via Azure Portal:
+  - Go to **Subscriptions** → **Usage + quotas**
+  - Search for "Premium Functions" or "Elastic Premium"
+  - Request increase to at least 1 instance
+
+- **Option B:** Use Consumption (Y1) plan by setting the GitHub variable:
+  ```
+  AZURE_FUNCTION_SKU=Y1
+  ```
+  Note: Consumption plan requires quota for "Dynamic VMs" in your region.
 
 ## API Documentation
 

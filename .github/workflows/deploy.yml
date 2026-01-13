@@ -562,7 +562,7 @@ jobs:
                 "value": ${{ vars.RAW_EVENT_RETENTION_DAYS || 365 }}
               },
               "functionAppSku": {
-                "value": "${{ vars.AZURE_FUNCTION_SKU || 'Y1' }}"
+                "value": "${{ vars.AZURE_FUNCTION_SKU || 'EP1' }}"
               }
             }
           }
