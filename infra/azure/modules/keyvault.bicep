@@ -11,6 +11,9 @@ param tags object
 @secure()
 param analyticsWriteKey string
 
+@description('Object ID of the service principal or user deploying (optional)')
+param deployerObjectId string = ''
+
 // Key Vault
 resource keyVault 'Microsoft.KeyVault/vaults@2023-02-01' = {
   name: keyVaultName
@@ -28,7 +31,20 @@ resource keyVault 'Microsoft.KeyVault/vaults@2023-02-01' = {
     enableSoftDelete: true
     softDeleteRetentionInDays: 90
     enableRbacAuthorization: false
-    accessPolicies: []
+    accessPolicies: deployerObjectId != '' ? [
+      {
+        tenantId: subscription().tenantId
+        objectId: deployerObjectId
+        permissions: {
+          secrets: [
+            'get'
+            'list'
+            'set'
+            'delete'
+          ]
+        }
+      }
+    ] : []
     publicNetworkAccess: 'Enabled'
     networkAcls: {
       defaultAction: 'Allow'

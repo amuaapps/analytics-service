@@ -519,6 +519,14 @@ jobs:
           name: deployment-package-azure
           path: ./dist
 
+      - name: Get service principal object ID
+        id: get-sp-id
+        run: |
+          # Get the object ID of the currently logged in service principal
+          SP_OBJECT_ID=$(az ad signed-in-user show --query id -o tsv 2>/dev/null || echo "")
+          echo "sp_object_id=$SP_OBJECT_ID" >> $GITHUB_OUTPUT
+          echo "Service Principal Object ID: $SP_OBJECT_ID"
+
       - name: Generate parameters JSON
         run: |
           cat > /tmp/azure-parameters.json << EOF
@@ -537,6 +545,9 @@ jobs:
               },
               "analyticsWriteKey": {
                 "value": "${{ secrets.ANALYTICS_WRITE_KEY }}"
+              },
+              "deployerObjectId": {
+                "value": "${{ steps.get-sp-id.outputs.sp_object_id }}"
               },
               "corsAllowedOrigins": {
                 "value": "${{ vars.CORS_ALLOWED_ORIGINS || '*' }}"

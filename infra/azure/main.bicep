@@ -106,6 +106,7 @@ module keyVault 'modules/keyvault.bicep' = {
     location: location
     tags: tags
     analyticsWriteKey: analyticsWriteKey
+    deployerObjectId: deployerObjectId
   }
 }
 
