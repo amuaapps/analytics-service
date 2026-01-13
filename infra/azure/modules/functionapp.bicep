@@ -318,8 +318,8 @@ resource stagingSlot 'Microsoft.Web/sites/slots@2022-09-01' = {
   }
 }
 
-// Grant Function App access to Key Vault (Production)
-resource keyVaultAccessPolicyProduction 'Microsoft.KeyVault/vaults/accessPolicies@2023-02-01' = {
+// Grant Function App access to Key Vault (both production and staging slots)
+resource keyVaultAccessPolicy 'Microsoft.KeyVault/vaults/accessPolicies@2023-02-01' = {
   name: '${keyVaultName}/add'
   properties: {
     accessPolicies: [
@@ -333,15 +333,6 @@ resource keyVaultAccessPolicyProduction 'Microsoft.KeyVault/vaults/accessPolicie
           ]
         }
       }
-    ]
-  }
-}
-
-// Grant Function App access to Key Vault (Staging)
-resource keyVaultAccessPolicyStaging 'Microsoft.KeyVault/vaults/accessPolicies@2023-02-01' = {
-  name: '${keyVaultName}/add'
-  properties: {
-    accessPolicies: [
       {
         tenantId: subscription().tenantId
         objectId: stagingSlot.identity.principalId
@@ -354,9 +345,6 @@ resource keyVaultAccessPolicyStaging 'Microsoft.KeyVault/vaults/accessPolicies@2
       }
     ]
   }
-  dependsOn: [
-    keyVaultAccessPolicyProduction
-  ]
 }
 
 // Outputs
