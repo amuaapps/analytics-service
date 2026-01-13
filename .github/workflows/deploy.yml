@@ -473,6 +473,35 @@ jobs:
           name: deployment-package-azure
           path: ./dist
 
+      - name: Register required Azure resource providers
+        run: |
+          echo "Checking and registering required Azure resource providers..."
+          
+          # List of required providers
+          PROVIDERS=(
+            "Microsoft.KeyVault"
+            "Microsoft.Storage"
+            "Microsoft.OperationalInsights"
+            "Microsoft.DocumentDB"
+            "Microsoft.Web"
+            "Microsoft.Insights"
+          )
+          
+          for provider in "${PROVIDERS[@]}"; do
+            echo "Checking $provider..."
+            state=$(az provider show --namespace $provider --query "registrationState" -o tsv 2>/dev/null || echo "NotRegistered")
+            
+            if [ "$state" != "Registered" ]; then
+              echo "Registering $provider..."
+              az provider register --namespace $provider --wait
+              echo "✓ $provider registered"
+            else
+              echo "✓ $provider already registered"
+            fi
+          done
+          
+          echo "All required resource providers are registered"
+
       - name: Generate parameters JSON
         run: |
           cat > /tmp/azure-parameters.json << EOF
