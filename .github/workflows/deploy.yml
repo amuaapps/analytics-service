@@ -473,9 +473,9 @@ jobs:
           name: deployment-package-azure
           path: ./dist
 
-      - name: Register required Azure resource providers
+      - name: Check Azure resource providers
         run: |
-          echo "Checking and registering required Azure resource providers..."
+          echo "Checking required Azure resource providers..."
           
           # List of required providers
           PROVIDERS=(
@@ -487,20 +487,36 @@ jobs:
             "Microsoft.Insights"
           )
           
+          MISSING_PROVIDERS=()
+          
           for provider in "${PROVIDERS[@]}"; do
-            echo "Checking $provider..."
             state=$(az provider show --namespace $provider --query "registrationState" -o tsv 2>/dev/null || echo "NotRegistered")
             
             if [ "$state" != "Registered" ]; then
-              echo "Registering $provider..."
-              az provider register --namespace $provider --wait
-              echo "✓ $provider registered"
+              echo "⚠️  $provider is NOT registered (state: $state)"
+              MISSING_PROVIDERS+=("$provider")
             else
-              echo "✓ $provider already registered"
+              echo "✓ $provider is registered"
             fi
           done
           
-          echo "All required resource providers are registered"
+          if [ ${#MISSING_PROVIDERS[@]} -gt 0 ]; then
+            echo ""
+            echo "❌ ERROR: The following resource providers are not registered:"
+            printf '  - %s\n' "${MISSING_PROVIDERS[@]}"
+            echo ""
+            echo "To register these providers, run the following commands with an account that has subscription-level permissions:"
+            echo ""
+            for provider in "${MISSING_PROVIDERS[@]}"; do
+              echo "  az provider register --namespace $provider"
+            done
+            echo ""
+            echo "Or register them via Azure Portal: Subscriptions → Resource providers"
+            exit 1
+          fi
+          
+          echo ""
+          echo "✓ All required resource providers are registered"
 
       - name: Generate parameters JSON
         run: |
