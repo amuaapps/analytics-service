@@ -538,7 +538,7 @@ jobs:
                 "value": "${{ needs.setup.outputs.environment }}"
               },
               "location": {
-                "value": "${{ vars.AZURE_LOCATION || 'eastus' }}"
+                "value": "${{ vars.AZURE_LOCATION || 'northeurope' }}"
               },
               "projectName": {
                 "value": "${{ vars.AZURE_PROJECT_NAME || 'analytics-service' }}"
@@ -562,7 +562,7 @@ jobs:
                 "value": ${{ vars.RAW_EVENT_RETENTION_DAYS || 365 }}
               },
               "functionAppSku": {
-                "value": "${{ vars.AZURE_FUNCTION_SKU || 'EP1' }}"
+                "value": "${{ vars.AZURE_FUNCTION_SKU || 'Y1' }}"
               }
             }
           }

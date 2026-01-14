@@ -188,20 +188,38 @@ Alternatively, register via Azure Portal: **Subscriptions** → **Resource provi
 
 **Note:** Registration typically takes 1-2 minutes. The deployment pipeline will automatically check for these providers and fail with clear instructions if any are missing.
 
-**2. Function App Quota:**
+**2. Request Dynamic VM Quota (Required):**
 
-The default deployment uses **Elastic Premium (EP1)** SKU. If your subscription doesn't have quota for this SKU, you have two options:
+The deployment uses **Consumption (Y1)** Function App plan, which requires quota for "Dynamic VMs". If you encounter a quota error during deployment, you must request a quota increase:
 
-- **Option A (Recommended):** Request quota increase via Azure Portal:
-  - Go to **Subscriptions** → **Usage + quotas**
-  - Search for "Premium Functions" or "Elastic Premium"
-  - Request increase to at least 1 instance
+**Via Azure Portal:**
+1. Go to **Subscriptions** → **Usage + quotas**
+2. Filter by:
+   - **Provider:** Microsoft.Web
+   - **Region:** North Europe (or your chosen region)
+3. Search for **"Dynamic"** or **"Function Apps"**
+4. Find **"Dynamic VMs"** or **"Total Regional vCPUs"**
+5. Click **"Request increase"**
+6. Request at least **1 instance** for Dynamic VMs
 
-- **Option B:** Use Consumption (Y1) plan by setting the GitHub variable:
-  ```
-  AZURE_FUNCTION_SKU=Y1
-  ```
-  Note: Consumption plan requires quota for "Dynamic VMs" in your region.
+**Via Azure CLI:**
+```bash
+# Check current quota (change region as needed)
+az vm list-usage --location northeurope --query "[?localName=='Dynamic VMs'].{Name:localName, Current:currentValue, Limit:limit}" -o table
+
+# Request increase via support ticket
+az support tickets create \
+  --ticket-name "Dynamic-VM-Quota-Increase" \
+  --title "Request Dynamic VM quota for Function Apps" \
+  --description "Need quota for Consumption Function Apps (Dynamic VMs)" \
+  --severity minimal \
+  --contact-first-name "Your Name" \
+  --contact-last-name "Last Name" \
+  --contact-method email \
+  --contact-email "your@email.com"
+```
+
+**Note:** Quota increases are typically approved within a few hours to 1 business day.
 
 ## API Documentation
 
