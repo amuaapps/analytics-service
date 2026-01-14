@@ -513,6 +513,40 @@ jobs:
       - name: Setup Bicep
         run: az bicep install
 
+      - name: Clean up existing resources (if region changed)
+        run: |
+          RG_NAME="analytics-service-${{ needs.setup.outputs.environment }}-rg"
+          
+          # Check if resource group exists
+          if az group exists --name $RG_NAME | grep -q "true"; then
+            echo "Resource group $RG_NAME exists, checking location..."
+            
+            # Get current location
+            CURRENT_LOCATION=$(az group show --name $RG_NAME --query location -o tsv)
+            TARGET_LOCATION="${{ vars.AZURE_LOCATION || 'northeurope' }}"
+            
+            echo "Current location: $CURRENT_LOCATION"
+            echo "Target location: $TARGET_LOCATION"
+            
+            if [ "$CURRENT_LOCATION" != "$TARGET_LOCATION" ]; then
+              echo "⚠️  Location mismatch detected. Deleting resource group to allow region change..."
+              az group delete --name $RG_NAME --yes --no-wait
+              
+              # Wait for deletion to complete
+              echo "Waiting for resource group deletion..."
+              while az group exists --name $RG_NAME | grep -q "true"; do
+                echo "Still deleting..."
+                sleep 10
+              done
+              
+              echo "✓ Resource group deleted successfully"
+            else
+              echo "✓ Location matches, no cleanup needed"
+            fi
+          else
+            echo "✓ Resource group does not exist, no cleanup needed"
+          fi
+
       - name: Download deployment artifact
         uses: actions/download-artifact@v4
         with:
