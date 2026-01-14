@@ -70,7 +70,7 @@ param tags object = {
 }
 
 // Generate unique suffix for globally unique names
-var uniqueSuffix = uniqueString(resourceGroup().id, projectName, environment)
+var uniqueSuffix = uniqueString(resourceGroup().id, projectName, environment, location)
 
 // Resource names
 var cosmosDbAccountName = '${projectName}-cosmos-${environment}'
