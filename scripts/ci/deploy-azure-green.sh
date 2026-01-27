@@ -40,7 +40,7 @@ echo "🚀 Deploying Azure infrastructure via Bicep (idempotent)..."
 az deployment group create \
   --name "$DEPLOYMENT_NAME" \
   --resource-group "$AZURE_RESOURCE_GROUP" \
-  --template-file infra/azure/main-new.bicep \
+  --template-file infra/azure/main.bicep \
   --parameters \
       location="$AZURE_LOCATION" \
       environment="$ENVIRONMENT" \
