@@ -10,13 +10,19 @@ set -euo pipefail
 : "${PROJECT_NAME:?PROJECT_NAME is required}"
 : "${ENVIRONMENT:?ENVIRONMENT is required}"
 : "${ARTIFACT_DIR:?ARTIFACT_DIR is required}"
-: "${ANALYTICS_WRITE_KEY:?ANALYTICS_WRITE_KEY is required}"
 
 # Optional env vars with defaults
 FUNCTION_APP_NAME="${AZURE_FUNCTION_APP_NAME:-${PROJECT_NAME}-func-${ENVIRONMENT}}"
 FUNCTION_APP_SKU="${AZURE_FUNCTION_SKU:-Y1}"
 LOG_LEVEL="${LOG_LEVEL:-info}"
 CORS_ORIGINS="${CORS_ORIGINS:-*}"
+
+# Auto-generate ANALYTICS_WRITE_KEY if not provided (for initial deployments)
+if [ -z "${ANALYTICS_WRITE_KEY:-}" ]; then
+  echo "⚠️  ANALYTICS_WRITE_KEY not provided - generating secure random key"
+  ANALYTICS_WRITE_KEY="$(openssl rand -base64 32)"
+  echo "✅ Generated new analytics write key (will be stored in Key Vault)"
+fi
 
 # Find the deployment zip file
 ZIP_FILE="$(ls -1 "${ARTIFACT_DIR}"/*.zip 2>/dev/null | head -n 1 || true)"

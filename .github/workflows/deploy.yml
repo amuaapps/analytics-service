@@ -283,7 +283,7 @@ jobs:
           PROJECT_NAME: ${{ env.PROJECT_NAME }}
           ENVIRONMENT: ${{ needs.context.outputs.environment }}
           ARTIFACT_DIR: ./artifacts
-          ANALYTICS_WRITE_KEY: ${{ secrets.ANALYTICS_WRITE_KEY }}
+          ANALYTICS_WRITE_KEY: ${{ secrets.ANALYTICS_WRITE_KEY || '' }}
           AZURE_FUNCTION_APP_NAME: ${{ vars.AZURE_FUNCTION_APP_NAME || '' }}
           AZURE_FUNCTION_SKU: ${{ vars.AZURE_FUNCTION_SKU || 'Y1' }}
           LOG_LEVEL: ${{ vars.LOG_LEVEL || (needs.context.outputs.environment == 'prod' && 'info' || 'debug') }}
