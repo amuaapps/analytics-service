@@ -1,6 +1,6 @@
-# agents.md — Amua Apps Open Source Coding Standards & OSS Setup (v1.0.0)
+# agents.md — Amua Apps Open Source Coding Standards & OSS Setup (v1.2.0)
 
-**Document version:** v1.0.0  
+**Document version:** v1.2.0  
 **Status:** Active  
 **Primary audience:** AI coding assistants / AI IDEs generating or editing code.  
 **Secondary audience:** Human engineers working on:
@@ -113,7 +113,83 @@ Recommended minimal structure:
 └─ README.md
 ```
 
-### 2.3 Multi-Cloud Infrastructure Layout (Azure + AWS)
+### 2.3 — Repos That Include Publishable Packages (recommended layout)
+
+#### 2.3.1 Goal
+
+Some repos ship two independent deliverables:
+1) **One or more packages** published to **GitHub Packages** (e.g., UI component library, analytics SDK)  
+2) **Infrastructure / hosted artifacts** deployed to Azure (handled under section 9)
+
+These deliverables MUST have **separate workflows** and MUST be isolatable via directory-based change detection (path filters).
+
+#### 2.3.2 Required top-level layout
+
+Recommended layout for repos that publish a package (single-package repo):
+
+```
+.
+├─ package/                 # publishable package boundary (ONLY package-related files)
+│  ├─ src/
+│  ├─ tests/
+│  ├─ package.json
+│  ├─ tsconfig.json
+│  ├─ README.md
+│  └─ CHANGELOG.md          # optional but recommended
+├─ infra/                   # IaC boundary (Azure-only; see section 2.5 after renumber)
+│  └─ azure/
+├─ docs/                    # contracts and documentation (see section 2.4 after renumber)
+├─ .github/workflows/
+│  ├─ publish-package.yml   # NEW: package publishing workflow (see section 9.4)
+│  └─ deploy-infra.yml      # existing infra flow (section 9)
+└─ README.md
+```
+
+If the repo publishes **multiple packages**, use:
+
+```
+packages/
+  ui/
+  analytics-sdk/
+  ...
+infra/
+docs/
+.github/workflows/
+```
+
+Rule:
+- `package/` (or `packages/**`) MUST contain everything required to build and publish the package(s).
+- `infra/` MUST contain everything required to deploy infra.
+- Cross-dependencies SHOULD be minimized. If unavoidable, dependencies MUST be explicitly documented in the workflow triggers.
+
+#### 2.3.3 Trigger rules (path filters)
+
+Workflows SHOULD trigger only when relevant folders change:
+
+- **Package publishing workflow** triggers on changes to:
+  - `package/**` (or `packages/**`)
+  - optionally `.github/workflows/publish-package.yml` and shared tooling config used by package builds (e.g., `.npmrc`, `tsconfig.base.json`)
+
+- **Infra deployment workflow** triggers on changes to:
+  - `infra/**`
+  - optionally `.github/workflows/deploy-infra.yml`
+
+Agents MUST NOT publish a package due to infra-only changes.
+
+### 2.4 Required UI & Brand Contracts (per repo)
+
+Every repo that renders UI MUST include the following files under `docs/`:
+
+- `docs/brand-contract.md`
+- `docs/ui-contract.md`
+- `docs/design-tokens.md`
+
+**Agent rule (non-negotiable):**
+- Before generating or changing UI, the agent MUST read and follow these contracts.
+- If any contract file is missing or ambiguous, the agent MUST **escalate to a human** rather than guessing.
+
+
+### 2.5 Multi-Cloud Infrastructure Layout (Azure + AWS)
 
 **Goal:** Keep all infra logic in-repo and automate deployments via GitHub Actions while allowing users to choose **Azure or AWS**.
 
@@ -236,7 +312,7 @@ Rules:
 - Use a typed config module, e.g.:
   ```ts
   export const config = {
-    env: getEnvVar("NODE_ENV", ["development", "staging", "production"]),
+    env: getEnvVar("NODE_ENV", ["dev", "staging", "prod"]),
   } as const;
   ```
 
@@ -293,36 +369,245 @@ All UI must meet WCAG AA at minimum:
 
 ## 7. Testing Standards (Jest)
 
-We use Jest for unit and integration tests. Pipelines MUST FAIL if these fail.
+We use Jest as the default test runner for Node.js and Next.js/React.
+Pipelines MUST FAIL if required test suites fail.
 
-### 7.1 General Rules
-Every new feature should include:
-- Unit tests for core logic.
-- Integration tests for critical paths.
+Testing is structured in layers to keep complexity low while still covering infrastructure-facing behavior:
 
-Tests must be deterministic and not depend on external network calls:
-- Mock external services or use local test doubles.
+- **Unit tests (fast, deterministic):** domain logic + orchestration using fakes.
+- **Component tests (medium):** real DB or dependencies via disposable environments (where practical).
+- **Release/Green-gate tests (slowest, highest confidence):** run post-deploy against **real infrastructure** in the green environment. No mocking of real dependencies.
 
-### 7.2 Structure
-- Mirror `src/` structure in `tests/`.
-- Test files: `*.test.ts` or `*.spec.ts`.
-- Descriptions should be behavior-focused:
+---
+
+### 7.1 Principles
+
+**1) Keep unit tests deterministic**
+- Unit tests MUST NOT depend on external network calls.
+- Unit tests MUST run offline and deterministically.
+
+**2) Test behavior, not implementation**
+- Prefer assertions on outcomes (responses, persisted state, emitted events) over internal function calls.
+- Avoid deep mocks of SDK internals. Mock/fake at our boundaries instead.
+
+**3) Separate “infra definition” from “runtime behavior”**
+- Infrastructure-as-Code (IaC) is validated using IaC tools (validate/lint/security scan/plan/what-if).
+- Runtime behavior is validated through component and release tests.
+
+**4) Prefer fakes over mocks**
+- Use small in-memory fakes for boundaries (queue, blob store, repository, clock, id generator).
+- Use mocks sparingly, primarily to assert a boundary interaction that cannot reasonably be faked.
+
+**5) Keep release tests small**
+- Release/green-gate tests must be minimal, stable, and time-bounded. They gate traffic flip.
+
+---
+
+### 7.2 Test Suites and When They Run
+
+We maintain separate suites with explicit intent. Each suite is a different signal.
+
+#### 7.2.1 Unit Tests (`test:unit`)
+**Purpose:** Fast feedback; validate domain logic and orchestration.
+**Runs:** Every PR and every build.
+
+Rules:
+- No external network calls.
+- Use fakes/test doubles for ports (DB, queue, blob, secrets, HTTP clients).
+- High coverage expected for core logic.
+
+#### 7.2.2 Component Tests (`test:component`)
+**Purpose:** Validate adapter behavior with real dependencies in disposable environments.
+**Runs:** Every PR (if fast enough) or at least on main.
+
+Examples:
+- Real DB via disposable environment (preferred) or dedicated ephemeral schema/database.
+- HTTP server started locally and exercised via fetch/supertest.
+- Outbound HTTP dependencies stubbed via MSW (Mock Service Worker) or equivalent.
+
+Rules:
+- Must remain deterministic.
+- Should not require deployed infrastructure.
+- Must clean up resources they create (or use a safety-net cleanup mechanism).
+
+#### 7.2.3 Release / Green-Gate Tests (`test:release`)
+**Purpose:** Gate blue/green flip. Validate real end-to-end behavior in green.
+**Runs:** After deployment to green, before switching traffic.
+
+Rules:
+- NO mocking of real infra dependencies. Tests run against real endpoints and real infra configured for green.
+- Tests MUST be time-bounded (explicit timeouts) and resilient to eventual consistency via polling.
+- Tests MUST tag all written data with a `testRunId` to support cleanup and debugging.
+- If these fail, we do NOT flip traffic from blue to green.
+
+---
+
+### 7.3 Architecture Rules to Keep Tests Simple
+
+To avoid overcomplicated mocking, code MUST be structured so infrastructure is behind explicit boundaries.
+
+**Ports & Adapters**
+- Domain logic MUST NOT import cloud SDKs, DB clients, or fetch directly.
+- External integrations MUST live behind adapter interfaces ("ports"), e.g.:
+  - `QueuePort`, `BlobStorePort`, `RepositoryPort`, `SecretsPort`, `HttpClientPort`
+
+**Wiring**
+- The “composition root” (app bootstrap) wires adapters to ports.
+- Unit tests import domain/services and inject fakes instead of mocking SDKs.
+
+**Allowed mocking targets**
+- Mock or fake **our own port interfaces**.
+- Avoid mocking the internals of third-party SDK modules except as a last resort.
+
+---
+
+### 7.4 Structure and Naming
+
+- Mirror `src/` structure in `tests/` where reasonable.
+- Test file extensions: `*.test.ts` or `*.spec.ts`.
+- Prefer behavior-focused descriptions:
   - `it('returns 400 when payload is invalid', ...)`
+  - `it('persists the donation and emits a confirmation event', ...)`
 
-### 7.3 Coverage
-Guidance (adjust if repo specifies exact thresholds):
-- 80%+ line and branch coverage for core services.
+**Recommended folder layout**
+- `tests/unit/**`
+- `tests/component/**`
+- `tests/release/**` (or `tests/e2e/**` if your org uses that naming)
+
+**Recommended Jest scripts**
+- `test:unit` runs only unit tests
+- `test:component` runs only component tests
+- `test:release` runs only release tests
+
+Tests MUST NOT rely on execution order. Each test must set up its own state.
+
+---
+
+### 7.5 Coverage Standards
+
+Guidance (unless the repo specifies exact thresholds):
+- **80%+ line and branch coverage** for core services and domain modules.
 - Enforce thresholds in Jest config where applicable.
 - Do not write meaningless tests to inflate coverage.
 
-### 7.4 Integration Tests
-Backend:
-- Use in-memory or disposable test environments (test DB, local mocks).
-- Exercise endpoints via HTTP calls (or handler invocations) with realistic payloads.
+Coverage expectations by suite:
+- Unit tests: primary driver of coverage.
+- Component & release tests: focus on critical paths; not used to inflate coverage.
 
-Frontend:
-- Use React Testing Library patterns.
+---
+
+### 7.6 Integration / Release Testing Strategy (Green Environment)
+
+Release tests run after deployment to green and validate the system with real infrastructure.
+
+#### 7.6.1 Minimal Green-Gate Test Set (recommended)
+Keep the suite small (typically 10–30 tests max):
+
+1. **Readiness**
+   - `/health/ready` indicates service is ready and can reach required dependencies.
+2. **Happy-path API**
+   - Representative request that reads/writes expected data.
+3. **Async flow (if applicable)**
+   - Publish → consume → persist → (optional) emit.
+4. **Storage flow (if applicable)**
+   - Write → read back → metadata correct.
+5. **Auth/secrets access**
+   - Service can access required secrets/config and can authenticate to dependencies.
+6. **One failure mode**
+   - e.g., invalid payload returns correct error OR poison message handled correctly.
+
+#### 7.6.2 Eventual Consistency and Async Assertions
+For queues/background processing, tests MUST:
+- Use polling assertions (wait until condition true or timeout).
+- Use explicit timeouts (e.g., 30–90s max per async check).
+- Surface `testRunId` and correlation IDs in failures.
+
+---
+
+### 7.7 Database Strategy for Blue/Green and Tests
+
+Blue/green deployments typically share the same database. Deployment must not “overwrite” DBs; the risk is schema change.
+
+#### 7.7.1 Schema Change Rules (Expand/Contract)
+Migrations MUST be backward-compatible with the currently live version:
+- **Expand:** add new tables/columns/indexes first; keep old paths working.
+- Deploy green.
+- Flip traffic.
+- **Contract:** remove old columns/paths only after blue is gone and usage is removed.
+
+Breaking migrations MUST NOT be coupled to a single deploy step that could strand the live version.
+
+#### 7.7.2 Writing Data in Release Tests (Safe Data Marking)
+Release tests may write data. They MUST do so safely:
+
+- Every release test run MUST generate a `testRunId` (UUID) and attach it to:
+  - request headers (e.g., `X-Test-Run-Id`)
+  - message metadata (if publishing events)
+  - persisted records (either via marker columns or natural key prefixes)
+
+**Preferred approaches (choose one per service):**
+1. **Marker columns + TTL cleanup**
+   - Add `createdByTestRunId`, `createdAt`, optionally `expiresAt`.
+   - A cleanup job deletes expired test data.
+2. **Natural key prefixing**
+   - Use deterministic keys like `test_<testRunId>_<n>`.
+   - Cleanup deletes `test_*` older than a retention window.
+3. **Transactional rollback (component tests only)**
+   - Roll back DB writes per test when tests run in-process and synchronous.
+
+#### 7.7.3 Cleanup Requirements
+- Tests SHOULD attempt cleanup in `afterEach/afterAll`.
+- Tests MUST NOT rely on cleanup always running (CI may cancel jobs).
+- A safety-net cleanup MUST exist for release tests:
+  - TTL-based cleanup, scheduled cleanup, or a disposable test schema/table.
+
+---
+
+### 7.8 Frontend Testing (Next.js + React)
+
+We follow React Testing Library patterns:
 - Test behavior/outcomes, not implementation details.
+- Avoid testing internal component state directly.
+
+#### 7.8.1 Unit/Component (React)
+- Use React Testing Library for rendering and user interactions.
+- Prefer `userEvent` over direct DOM event dispatching.
+- Assert on what the user sees/does:
+  - text, roles, labels, navigation, disabled/enabled states.
+
+#### 7.8.2 Network and Data Fetching
+- Frontend tests MUST NOT call real APIs.
+- Stub network using MSW or equivalent.
+- For Next.js:
+  - Test server components and data loaders by mocking fetch at the boundary where data is requested.
+  - Prefer testing page behavior (rendered output) rather than Next internals.
+
+#### 7.8.3 Release Tests for Frontend (Green)
+If the frontend is deployed separately, release tests MAY include:
+- critical navigation paths
+- authentication flow smoke test
+- one critical API-backed interaction
+
+These tests run against green URLs and MUST use `testRunId` markers in requests.
+
+---
+
+### 7.9 Configuration and Environment
+
+- Tests MUST fail fast on missing required env vars.
+- Configuration parsing MUST be typed and validated (e.g., using a schema).
+- Release test environments MUST be isolated by configuration (green-only resources / namespaces).
+
+---
+
+### 7.10 Non-Goals / Anti-Patterns
+
+Avoid:
+- One giant “integration test” suite that runs everywhere.
+- Deep mocking of third-party SDKs across many tests.
+- Tests that depend on global state or execution order.
+- Writing large volumes of test data into shared environments.
+- Coupling schema-breaking migrations to a single deployment step.
 
 ---
 
@@ -456,25 +741,16 @@ Stage 4 MUST include:
 - **Integration tests** against GREEN (end-to-end or service-level integration appropriate to the component)
 - **Infra-related security tests** appropriate to the chosen IaC and cloud (e.g., IaC policy checks, configuration validation, post-deploy security assertions)
 
-**Switch rule (preferred):**
+Switch rule:
 - Only if **all** Stage 4 checks pass, the workflow MAY switch traffic from **BLUE → GREEN**.
 
-**Switch rule (AWS Lambda exception):**
-- For AWS Lambda deployments where API Gateway integrations route only through the `live` alias:
-  - The workflow MAY switch the `live` alias to GREEN **before** running integration tests.
-  - This is acceptable ONLY if:
-    - **Automatic rollback** is implemented: if tests fail, the workflow MUST immediately revert the `live` alias back to BLUE.
-    - **Fast failure**: tests must fail quickly (within seconds/minutes) to minimize user impact.
-    - **Monitoring**: the workflow MUST log the switch and rollback actions clearly.
-  - Rationale: Without a separate "candidate" alias or API Gateway stage, testing GREEN before switching would test BLUE instead.
-
-**Failure rule (mandatory):**
+Failure rule (mandatory):
 - If **any** Stage 4 check fails:
   - The workflow MUST **fail**.
   - The workflow MUST ensure traffic remains on **BLUE** (or is switched back to BLUE if a switch partially occurred).
-  - The workflow MUST perform rollback/cleanup actions as defined by the repo's blue/green mechanism (e.g., revert alias/route weights, swap back slots, revert gateway routing, tear down or disable GREEN where safe).
+  - The workflow MUST perform rollback/cleanup actions as defined by the repo’s blue/green mechanism (e.g., revert alias/route weights, swap back slots, revert gateway routing, tear down or disable GREEN where safe).
 
-**Observability:**
+Observability:
 - Stage 4 SHOULD publish test results and infra/security check outputs as artifacts.
 - Stage 4 SHOULD emit a clear, human-readable summary describing why the gate failed and what rollback action was taken.
 
@@ -550,6 +826,175 @@ Use GitHub Environments:
 - Configure required reviewers for `prod` if the repo is intended for real deployments.
 
 ---
+
+### 9.5 — Package Publishing Workflows
+
+This subsection defines the standard for publishing **versioned packages** (UI libraries, SDKs, shared tooling) to **GitHub Packages**, independent of Azure infrastructure deployment.
+
+This flow is intentionally different from the infra deployment flow in section 9, which is designed around Azure **blue/green** deployments. 
+
+#### 9.5.1 Principles (non-negotiable)
+
+1) **Separate workflows**
+- Package publishing MUST be in its own workflow file (e.g., `.github/workflows/publish-package.yml`).
+- Azure infra deployments MUST continue to follow section 9 in a separate workflow. 
+
+2) **Single workflow, three environments**
+- The package publishing workflow MUST support **dev**, **staging**, **prod** in a single YAML:
+  - Common jobs: `test`, `build`
+  - Publish jobs: `publish_dev`, `publish_staging`, `publish_prod`
+
+3) **Versioning model**
+- Base version MUST be stored in the package itself (e.g., `package/package.json`).
+- Publishing rules:
+  - **dev** publishes pre-releases: `X.Y.Z-pr.N`
+  - **staging** publishes release candidates: `X.Y.Z-rc.N`
+  - **prod** publishes stable: `X.Y.Z`
+
+4) **Branch ↔ environment mapping**
+This workflow MUST use the repo’s standard mapping:  
+- `develop` → dev  
+- `release` → staging  
+- `main` → prod 
+
+#### 9.5.2 When to publish (what changes qualify)
+
+A package publish job MUST run only when package-relevant files change (e.g., `package/**` or `packages/**`).
+
+Examples of changes that SHOULD trigger a publish:
+- exported API changes (code, types)
+- dependency changes
+- build output changes
+
+Examples that MUST NOT trigger a publish:
+- `infra/**` changes only
+- documentation changes outside the package boundary (unless the doc is bundled into the package)
+
+#### 9.5.3 Required GitHub Actions permissions
+
+The workflow MUST include:
+
+- `permissions: contents: read`
+- `permissions: packages: write`
+
+If the workflow uses CodeQL as part of its test stage (allowed), it also needs the standard CodeQL permissions as required by the org baseline in section 9.3.1.
+
+#### 9.5.4 Workflow triggers (recommended)
+
+The workflow SHOULD trigger on pushes to the env branches, restricted to package paths. Example pattern:
+
+```yaml
+on:
+  push:
+    branches: [develop, release, main]
+    paths:
+      - "package/**"
+      - ".github/workflows/publish-package.yml"
+      - ".npmrc"
+      - "tsconfig.base.json"
+```
+
+Optional (recommended): allow manual re-publish for recovery/debugging:
+
+```yaml
+on:
+  workflow_dispatch: {}
+```
+
+#### 9.5.5 Common Job 1 — Test (required)
+
+The `test` job MUST follow the same minimum expectations as section 9.3.1:
+- lint
+- typecheck
+- formatting check
+- unit tests with coverage thresholds
+- dependency security checks
+- CodeQL (per org policy) fileciteturn1file11L56-L63
+
+It MUST run before any publish job.
+
+#### 9.5.6 Common Job 2 — Build (required)
+
+The `build` job MUST:
+- run after `test`
+- produce an **immutable package artifact** (e.g., `npm pack`) and upload it as a workflow artifact
+- avoid rebuilding in publish jobs (publish jobs SHOULD consume the artifact)
+
+This follows the same principle as section 9.3.2 (“build once, deploy/publish from artifacts”). fileciteturn1file11L68-L78
+
+#### 9.5.7 Publish jobs (dev / staging / prod)
+
+Each publish job MUST:
+- download the build artifact from `build`
+- authenticate to GitHub Packages using the GitHub Actions token
+- compute the correct version string
+- publish the package
+- attach metadata to logs (package name, computed version, commit SHA)
+
+##### 9.5.7.1 Dev publish (`publish_dev`)
+
+Trigger condition:
+- branch == `develop`
+
+Version format:
+- `X.Y.Z-pr.N`
+
+Tagging (recommended):
+- publish with npm dist-tag `pr` (or `next`), NOT `latest`
+
+Required steps:
+- compute `N` as the next available `pr` number for `X.Y.Z` (query registry), or fall back to `github.run_number` if registry access is unavailable
+- set version without creating git tags:
+  - `npm version --no-git-tag-version X.Y.Z-pr.N`
+
+##### 9.5.7.2 Staging publish (`publish_staging`)
+
+Trigger condition:
+- branch == `release`
+
+Version format:
+- `X.Y.Z-rc.N`
+
+Tagging (recommended):
+- publish with npm dist-tag `rc` (or `beta`), NOT `latest`
+
+Required steps:
+- compute `N` as the next available `rc` number for `X.Y.Z`
+- `npm version --no-git-tag-version X.Y.Z-rc.N`
+
+##### 9.5.7.3 Prod publish (`publish_prod`)
+
+Trigger condition:
+- branch == `main`
+
+Version format:
+- `X.Y.Z`
+
+Tagging (required):
+- publish with npm dist-tag `latest`
+
+Required gates (recommended and prescriptive):
+- `package.json` version MUST already be `X.Y.Z` (stable)
+- the workflow SHOULD require a git tag `vX.Y.Z` on the commit (or an equivalent release marker)
+
+This ensures prod is intentional and reproducible.
+
+#### 9.5.8 Minimal publish implementation requirements (GitHub Packages)
+
+The workflow MUST configure npm to publish to GitHub Packages. Minimal patterns:
+
+- `.npmrc` configured for GitHub Packages registry (scoped):
+  - `@<scope>:registry=https://npm.pkg.github.com`
+- `NODE_AUTH_TOKEN` set to `${{ secrets.GITHUB_TOKEN }}` (or `${{ github.token }}`) for publish
+- `npm publish` MUST run from inside the package boundary (`package/`)
+
+#### 9.5.9 Relationship to infra deployments
+
+If the repo also deploys Storybook or documentation sites to Azure:
+- Infra deployments MUST remain in the infra workflow (section 9).
+- The infra workflow MAY consume the package version as an input (e.g., “deploy Storybook for X.Y.Z-rc.N”), but MUST NOT publish the package.
+
+This preserves clean ownership boundaries between “artifact publishing” and “runtime deployment” consistent with section 9’s gated workflow model. 
 
 ## 10. Performance & Reliability
 

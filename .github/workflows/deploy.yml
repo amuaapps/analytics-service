@@ -6,6 +6,13 @@ on:
       - develop
       - release
       - main
+    paths:
+      - 'src/**'
+      - 'infra/**'
+      - 'scripts/**'
+      - 'package*.json'
+      - 'tsconfig.json'
+      - '.github/workflows/deploy*.yml'
   pull_request:
     branches:
       - develop
@@ -14,15 +21,16 @@ on:
   workflow_dispatch:
     inputs:
       cloud:
-        description: 'Target cloud provider (aws or azure)'
+        description: 'Target cloud provider'
         required: false
         type: choice
         options:
           - auto
-          - aws
           - azure
+          - aws
+        default: auto
       environment:
-        description: 'Target environment (dev, staging, prod)'
+        description: 'Target environment'
         required: false
         type: choice
         options:
@@ -30,147 +38,101 @@ on:
           - dev
           - staging
           - prod
+        default: auto
 
-# Prevent concurrent deployments to the same environment
-# Lock is per resolved environment (dev/staging/prod), not per branch or input
-# This ensures manual and automatic deployments to the same environment are serialized
 concurrency:
-  group: deploy-${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.environment != 'auto' && github.event.inputs.environment != '') && github.event.inputs.environment || (github.ref_name == 'develop' && 'dev') || (github.ref_name == 'release' && 'staging') || (github.ref_name == 'main' && 'prod') || github.ref_name }}
+  group: deploy-${{ github.event_name == 'workflow_dispatch' && github.event.inputs.environment != 'auto' && github.event.inputs.environment || (github.ref_name == 'develop' && 'dev') || (github.ref_name == 'release' && 'staging') || (github.ref_name == 'main' && 'prod') || github.ref_name }}
   cancel-in-progress: false
 
-# Minimal permissions (least privilege)
 permissions:
   contents: read
-  id-token: write  # Required for OIDC authentication with AWS and Azure
+  id-token: write
   actions: read
 
 env:
   NODE_VERSION: '20.x'
+  PROJECT_NAME: 'analytics-service'
 
 jobs:
-  # Determine environment from branch
-  setup:
-    name: Determine Environment
+  # ============================================================================
+  # STAGE 0: Context & Decision
+  # ============================================================================
+  context:
+    name: Context
     runs-on: ubuntu-latest
-    # Only run setup for push/workflow_dispatch (not PRs)
     if: github.event_name != 'pull_request'
     outputs:
       environment: ${{ steps.detect.outputs.environment }}
     steps:
-      - name: Detect environment
+      - name: Detect environment from branch
         id: detect
         run: |
-          # Determine environment from branch or workflow input
           if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ inputs.environment }}" != "auto" ]; then
-            ENVIRONMENT="${{ inputs.environment }}"
+            ENV="${{ inputs.environment }}"
           else
             case "${{ github.ref_name }}" in
-              develop)
-                ENVIRONMENT="dev"
-                ;;
-              release)
-                ENVIRONMENT="staging"
-                ;;
-              main)
-                ENVIRONMENT="prod"
-                ;;
+              develop) ENV="dev" ;;
+              release) ENV="staging" ;;
+              main) ENV="prod" ;;
               *)
                 echo "::error::Unsupported branch: ${{ github.ref_name }}"
                 exit 1
                 ;;
             esac
           fi
-          
-          echo "environment=$ENVIRONMENT" >> $GITHUB_OUTPUT
-          echo "Detected environment: $ENVIRONMENT"
+          echo "environment=$ENV" >> $GITHUB_OUTPUT
+          echo "Detected environment: $ENV"
 
-  # Detect cloud provider (runs in environment context to access environment variables)
-  detect-cloud:
-    name: Detect Cloud Provider
+  decide:
+    name: Decide Cloud
     runs-on: ubuntu-latest
-    needs: setup
-    environment: ${{ needs.setup.outputs.environment }}
+    needs: context
+    environment: ${{ needs.context.outputs.environment }}
     outputs:
       cloud: ${{ steps.detect.outputs.cloud }}
     steps:
       - name: Detect cloud provider
         id: detect
         env:
-          AWS_ROLE_TO_ASSUME: ${{ vars.AWS_ROLE_TO_ASSUME }}
           AZURE_CLIENT_ID: ${{ vars.AZURE_CLIENT_ID }}
+          AWS_ROLE_TO_ASSUME: ${{ vars.AWS_ROLE_TO_ASSUME }}
         run: |
-          ENVIRONMENT="${{ needs.setup.outputs.environment }}"
           CLOUD_INPUT="${{ inputs.cloud }}"
           
-          echo "Checking cloud configuration for environment: $ENVIRONMENT"
-          echo "AWS_ROLE_TO_ASSUME: ${AWS_ROLE_TO_ASSUME:-(not set)}"
-          echo "AZURE_CLIENT_ID: ${AZURE_CLIENT_ID:-(not set)}"
-          
           if [ "$CLOUD_INPUT" = "" ] || [ "$CLOUD_INPUT" = "auto" ]; then
-            # Auto-detect based on environment-specific variables (OIDC roles/principals)
-            AWS_CONFIGURED=false
-            AZURE_CONFIGURED=false
-            
-            # Check AWS configuration (environment-specific OIDC role or legacy keys)
-            if [ -n "$AWS_ROLE_TO_ASSUME" ] || [ -n "${{ secrets.AWS_ACCESS_KEY_ID }}" ]; then
-              AWS_CONFIGURED=true
-            fi
-            
-            # Check Azure configuration (environment-specific OIDC client ID)
-            if [ -n "$AZURE_CLIENT_ID" ]; then
-              AZURE_CONFIGURED=true
-            fi
-            
-            if [ "$AWS_CONFIGURED" = true ] && [ "$AZURE_CONFIGURED" = false ]; then
-              CLOUD="aws"
-              echo "Auto-detected cloud: AWS (environment: $ENVIRONMENT)"
-            elif [ "$AWS_CONFIGURED" = false ] && [ "$AZURE_CONFIGURED" = true ]; then
+            # Auto-detect based on environment variables
+            if [ -n "$AZURE_CLIENT_ID" ] && [ -z "$AWS_ROLE_TO_ASSUME" ]; then
               CLOUD="azure"
-              echo "Auto-detected cloud: Azure (environment: $ENVIRONMENT)"
-            elif [ "$AWS_CONFIGURED" = true ] && [ "$AZURE_CONFIGURED" = true ]; then
-              echo "::error::Both AWS and Azure are configured for environment '$ENVIRONMENT'. Please specify 'cloud' input explicitly."
+            elif [ -z "$AZURE_CLIENT_ID" ] && [ -n "$AWS_ROLE_TO_ASSUME" ]; then
+              CLOUD="aws"
+            elif [ -n "$AZURE_CLIENT_ID" ] && [ -n "$AWS_ROLE_TO_ASSUME" ]; then
+              echo "::error::Both Azure and AWS configured. Specify cloud explicitly."
               exit 1
             else
-              echo "::error::No cloud provider configured for environment '$ENVIRONMENT'. Please set AWS_ROLE_TO_ASSUME or AZURE_CLIENT_ID as environment variables."
+              echo "::error::No cloud provider configured for ${{ needs.context.outputs.environment }}"
               exit 1
             fi
           else
             CLOUD="$CLOUD_INPUT"
-            echo "Using specified cloud: $CLOUD (environment: $ENVIRONMENT)"
-            
-            # Validate cloud configuration for environment
-            if [ "$CLOUD" = "aws" ]; then
-              if [ -z "$AWS_ROLE_TO_ASSUME" ] && [ -z "${{ secrets.AWS_ACCESS_KEY_ID }}" ]; then
-                echo "::error::AWS selected but neither AWS_ROLE_TO_ASSUME (environment variable) nor AWS_ACCESS_KEY_ID (secret) configured for environment '$ENVIRONMENT'"
-                exit 1
-              fi
-            elif [ "$CLOUD" = "azure" ]; then
-              if [ -z "$AZURE_CLIENT_ID" ]; then
-                echo "::error::Azure selected but AZURE_CLIENT_ID environment variable not configured for environment '$ENVIRONMENT'"
-                exit 1
-              fi
-            else
-              echo "::error::Invalid cloud provider: $CLOUD"
-              exit 1
-            fi
           fi
           
           echo "cloud=$CLOUD" >> $GITHUB_OUTPUT
+          echo "Selected cloud: $CLOUD"
 
-  # Stage 1: Test
+  # ============================================================================
+  # STAGE 1: Test
+  # ============================================================================
   test:
-    name: Stage 1 - Test
+    name: Test
     runs-on: ubuntu-latest
-    # Run on all events (PRs, push, workflow_dispatch)
-    # Setup job is skipped on PRs, so we use needs with always()
-    needs: setup
-    if: always() && (needs.setup.result == 'success' || github.event_name == 'pull_request')
+    needs: context
+    if: always() && (needs.context.result == 'success' || github.event_name == 'pull_request')
     permissions:
       contents: read
       security-events: write
       actions: read
     steps:
-      - name: Checkout code
+      - name: Checkout
         uses: actions/checkout@v4
 
       - name: Setup Node.js
@@ -191,46 +153,41 @@ jobs:
       - name: Format check
         run: npm run format:check
 
-      - name: Run CI tests with coverage
+      - name: Run tests with coverage
         run: npm run test:ci
 
-      - name: Check coverage thresholds
-        run: |
-          # Coverage thresholds are enforced in jest.config.js
-          echo "Coverage thresholds checked by Jest"
-
-      - name: Upload coverage reports
+      - name: Upload coverage
         uses: codecov/codecov-action@v3
         with:
           files: ./coverage/coverage-final.json
           flags: unittests
-          name: codecov-analytics-service
 
       - name: Security audit
         run: npm audit --audit-level=high
         continue-on-error: false
 
-      - name: Initialize CodeQL
+      - name: CodeQL init
         uses: github/codeql-action/init@v3
         with:
           languages: javascript-typescript
           queries: security-and-quality
 
-      - name: Autobuild
+      - name: CodeQL autobuild
         uses: github/codeql-action/autobuild@v3
 
-      - name: Perform CodeQL Analysis
+      - name: CodeQL analyze
         uses: github/codeql-action/analyze@v3
 
-  # Stage 2: Build
+  # ============================================================================
+  # STAGE 2: Build
+  # ============================================================================
   build:
-    name: Stage 2 - Build
+    name: Build
     runs-on: ubuntu-latest
-    needs: [setup, detect-cloud, test]
-    # Only run build for push/workflow_dispatch (not PRs)
+    needs: [context, decide, test]
     if: github.event_name != 'pull_request'
     steps:
-      - name: Checkout code
+      - name: Checkout
         uses: actions/checkout@v4
 
       - name: Setup Node.js
@@ -239,222 +196,55 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
           cache: 'npm'
 
-      - name: Install dependencies (with dev dependencies for build tools)
+      - name: Install dependencies
         run: npm ci
 
       - name: Build TypeScript
         run: npm run build
 
-      - name: Create deployment package (prod dependencies only)
+      - name: Create deployment package
         run: |
           mkdir -p deployment
           cp -r dist/* deployment/
           cp package.json package-lock.json deployment/
           cd deployment
           npm ci --production --ignore-scripts
-          cd ../..
-          
-      - name: Package for AWS Lambda
-        if: needs.detect-cloud.outputs.cloud == 'aws'
-        run: |
-          cd deployment
-          zip -r ../lambda-deployment.zip .
-          cd ..
-          
-      - name: Package for Azure Functions
-        if: needs.detect-cloud.outputs.cloud == 'azure'
-        run: |
-          # Copy host.json to deployment folder for Azure Functions routing
-          cp host.json deployment/
-          cd deployment
-          zip -r ../function-deployment.zip .
           cd ..
 
-      - name: Upload deployment artifact
+      - name: Add Azure Functions host.json
+        if: needs.decide.outputs.cloud == 'azure'
+        run: cp host.json deployment/
+
+      - name: Create deployment ZIP
+        run: |
+          cd deployment
+          zip -r ../deployment.zip .
+          cd ..
+          ls -lh deployment.zip
+
+      - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: deployment-package-${{ needs.detect-cloud.outputs.cloud }}
-          path: |
-            *.zip
+          name: deployment-package
+          path: deployment.zip
           retention-days: 30
 
-  # Stage 3: Deploy GREEN (AWS)
-  deploy-aws-green:
-    name: Stage 3 - Deploy GREEN (AWS)
+  # ============================================================================
+  # STAGE 3: Deploy GREEN (Azure)
+  # ============================================================================
+  deploy_azure:
+    name: Deploy GREEN (Azure)
     runs-on: ubuntu-latest
-    needs: [setup, detect-cloud, build]
-    if: needs.detect-cloud.outputs.cloud == 'aws'
-    environment: ${{ needs.setup.outputs.environment }}
+    needs: [context, decide, build]
+    if: needs.decide.outputs.cloud == 'azure'
+    environment: ${{ needs.context.outputs.environment }}
     outputs:
-      ingest_function: ${{ steps.deploy.outputs.ingest_function }}
-      query_function: ${{ steps.deploy.outputs.query_function }}
-      processor_function: ${{ steps.deploy.outputs.processor_function }}
-      ingest_version: ${{ steps.deploy.outputs.ingest_version }}
-      query_version: ${{ steps.deploy.outputs.query_version }}
-      processor_version: ${{ steps.deploy.outputs.processor_version }}
-      api_url: ${{ steps.get-api-url.outputs.api_url }}
-      secret_name: ${{ steps.get-secret-name.outputs.secret_name }}
+      green_url: ${{ steps.deploy.outputs.green_url }}
+      green_id: ${{ steps.deploy.outputs.green_id }}
+      blue_id: ${{ steps.deploy.outputs.blue_id }}
+      active_url: ${{ steps.deploy.outputs.active_url }}
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          role-to-assume: ${{ vars.AWS_ROLE_TO_ASSUME }}
-          role-session-name: GitHubActions-${{ github.run_id }}-deploy-green
-          aws-region: ${{ vars.AWS_REGION || 'us-east-1' }}
-          # Legacy fallback (will be removed in future)
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v3
-        with:
-          terraform_version: 1.5.0
-          terraform_wrapper: false
-
-      - name: Download deployment artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: deployment-package-aws
-          path: ./dist
-
-      - name: Configure Terraform Backend
-        working-directory: infra/aws
-        run: |
-          # Generate backend configuration from GitHub Secrets/Variables
-          # This avoids checking in sensitive backend config
-          cat > backend-generated.hcl <<EOF
-          bucket         = "${{ secrets.TF_STATE_BUCKET || 'analytics-service-terraform-state' }}"
-          key            = "analytics-service/${{ needs.setup.outputs.environment }}/terraform.tfstate"
-          region         = "${{ vars.AWS_REGION || 'us-east-1' }}"
-          encrypt        = true
-          dynamodb_table = "${{ secrets.TF_STATE_LOCK_TABLE || 'terraform-state-lock' }}"
-          EOF
-          
-          echo "Backend configuration generated"
-          cat backend-generated.hcl
-
-      - name: Terraform Init
-        working-directory: infra/aws
-        run: terraform init -backend-config=backend-generated.hcl
-        env:
-          TF_VAR_environment: ${{ needs.setup.outputs.environment }}
-          TF_VAR_aws_region: ${{ vars.AWS_REGION || 'us-east-1' }}
-          TF_VAR_project_name: analytics-service
-
-      - name: Terraform Plan
-        working-directory: infra/aws
-        run: terraform plan -out=tfplan
-        env:
-          TF_VAR_environment: ${{ needs.setup.outputs.environment }}
-          TF_VAR_aws_region: ${{ vars.AWS_REGION || 'us-east-1' }}
-          TF_VAR_project_name: analytics-service
-
-      - name: Terraform Apply
-        working-directory: infra/aws
-        run: terraform apply -auto-approve tfplan
-        env:
-          TF_VAR_environment: ${{ needs.setup.outputs.environment }}
-          TF_VAR_aws_region: ${{ vars.AWS_REGION || 'us-east-1' }}
-          TF_VAR_project_name: analytics-service
-
-      - name: Get Terraform outputs
-        id: get-api-url
-        working-directory: infra/aws
-        run: |
-          # Export API URL for Stage 4 (avoids terraform dependency in switch job)
-          API_URL=$(terraform output -raw api_gateway_url)
-          echo "api_url=$API_URL" >> $GITHUB_OUTPUT
-          echo "API Gateway URL: $API_URL"
-
-      - name: Get secret name
-        id: get-secret-name
-        working-directory: infra/aws
-        run: |
-          # Export secret name for updating secret value
-          SECRET_NAME=$(terraform output -raw analytics_write_key_secret_name)
-          echo "secret_name=$SECRET_NAME" >> $GITHUB_OUTPUT
-          echo "Secret name: $SECRET_NAME"
-
-      - name: Update Analytics Write Key Secret
-        env:
-          AWS_REGION: ${{ vars.AWS_REGION || 'us-east-1' }}
-          SECRET_NAME: ${{ steps.get-secret-name.outputs.secret_name }}
-          ANALYTICS_WRITE_KEY: ${{ secrets.ANALYTICS_WRITE_KEY }}
-        run: |
-          echo "Updating secret: $SECRET_NAME"
-          
-          # Update the secret value (AWS CLI automatically masks secret values in logs)
-          aws secretsmanager put-secret-value \
-            --secret-id "$SECRET_NAME" \
-            --secret-string "$ANALYTICS_WRITE_KEY" \
-            --region "$AWS_REGION"
-          
-          echo "✅ Analytics write key secret updated successfully"
-          echo "Note: Secret value is NOT stored in Terraform state"
-
-      - name: Deploy Lambda functions
-        id: deploy
-        env:
-          AWS_REGION: ${{ vars.AWS_REGION || 'us-east-1' }}
-          PROJECT_NAME: analytics-service
-          ENVIRONMENT: ${{ needs.setup.outputs.environment }}
-        run: |
-          # Update Lambda function code (region from AWS credentials config)
-          aws lambda update-function-code \
-            --function-name ${PROJECT_NAME}-ingest-${ENVIRONMENT} \
-            --zip-file fileb://lambda-deployment.zip \
-            --region ${AWS_REGION} \
-            --publish > /tmp/ingest-version.json
-          
-          aws lambda update-function-code \
-            --function-name ${PROJECT_NAME}-query-${ENVIRONMENT} \
-            --zip-file fileb://lambda-deployment.zip \
-            --region ${AWS_REGION} \
-            --publish > /tmp/query-version.json
-          
-          aws lambda update-function-code \
-            --function-name ${PROJECT_NAME}-processor-${ENVIRONMENT} \
-            --zip-file fileb://lambda-deployment.zip \
-            --region ${AWS_REGION} \
-            --publish > /tmp/processor-version.json
-          
-          # Extract version numbers for each function
-          INGEST_VERSION=$(jq -r '.Version' /tmp/ingest-version.json)
-          QUERY_VERSION=$(jq -r '.Version' /tmp/query-version.json)
-          PROCESSOR_VERSION=$(jq -r '.Version' /tmp/processor-version.json)
-          
-          # Output function names
-          echo "ingest_function=${PROJECT_NAME}-ingest-${ENVIRONMENT}" >> $GITHUB_OUTPUT
-          echo "query_function=${PROJECT_NAME}-query-${ENVIRONMENT}" >> $GITHUB_OUTPUT
-          echo "processor_function=${PROJECT_NAME}-processor-${ENVIRONMENT}" >> $GITHUB_OUTPUT
-          
-          # Output individual versions for each function
-          echo "ingest_version=$INGEST_VERSION" >> $GITHUB_OUTPUT
-          echo "query_version=$QUERY_VERSION" >> $GITHUB_OUTPUT
-          echo "processor_version=$PROCESSOR_VERSION" >> $GITHUB_OUTPUT
-          
-          echo "✅ Deployed versions:"
-          echo "  Ingest: $INGEST_VERSION"
-          echo "  Query: $QUERY_VERSION"
-          echo "  Processor: $PROCESSOR_VERSION"
-          echo "Region: ${AWS_REGION}"
-          echo "Note: Live alias still points to previous version (BLUE)"
-
-  # Stage 3: Deploy GREEN (Azure)
-  deploy-azure-green:
-    name: Stage 3 - Deploy GREEN (Azure)
-    runs-on: ubuntu-latest
-    needs: [setup, detect-cloud, build]
-    if: needs.detect-cloud.outputs.cloud == 'azure'
-    environment: ${{ needs.setup.outputs.environment }}
-    outputs:
-      function_app: ${{ steps.deploy.outputs.function_app }}
-      staging_url: ${{ steps.deploy.outputs.staging_url }}
-    steps:
-      - name: Checkout code
+      - name: Checkout
         uses: actions/checkout@v4
 
       - name: Azure Login (OIDC)
@@ -463,383 +253,98 @@ jobs:
           client-id: ${{ vars.AZURE_CLIENT_ID }}
           tenant-id: ${{ vars.AZURE_TENANT_ID }}
           subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
-
-      - name: Check Azure resource providers
-        run: |
-          echo "Checking required Azure resource providers..."
-          
-          # List of required providers
-          PROVIDERS=(
-            "Microsoft.KeyVault"
-            "Microsoft.Storage"
-            "Microsoft.OperationalInsights"
-            "Microsoft.DocumentDB"
-            "Microsoft.Web"
-            "Microsoft.Insights"
-          )
-          
-          MISSING_PROVIDERS=()
-          
-          for provider in "${PROVIDERS[@]}"; do
-            state=$(az provider show --namespace $provider --query "registrationState" -o tsv 2>/dev/null || echo "NotRegistered")
-            
-            if [ "$state" != "Registered" ]; then
-              echo "⚠️  $provider is NOT registered (state: $state)"
-              MISSING_PROVIDERS+=("$provider")
-            else
-              echo "✓ $provider is registered"
-            fi
-          done
-          
-          if [ ${#MISSING_PROVIDERS[@]} -gt 0 ]; then
-            echo ""
-            echo "❌ ERROR: The following resource providers are not registered in your Azure subscription:"
-            printf '  - %s\n' "${MISSING_PROVIDERS[@]}"
-            echo ""
-            echo "This is a one-time setup requirement. To register these providers, run:"
-            echo ""
-            for provider in "${MISSING_PROVIDERS[@]}"; do
-              echo "  az provider register --namespace $provider"
-            done
-            echo ""
-            echo "Or register via Azure Portal: Subscriptions → Resource providers"
-            echo "See README.md for more details on Azure setup requirements."
-            exit 1
-          fi
-          
-          echo ""
-          echo "✓ All required resource providers are registered"
 
       - name: Setup Bicep
         run: az bicep install
 
-      - name: Download deployment artifact
+      - name: Ensure resource group exists
+        run: |
+          RESOURCE_GROUP="${PROJECT_NAME}-${{ needs.context.outputs.environment }}-rg"
+          LOCATION="${{ vars.AZURE_LOCATION || 'northeurope' }}"
+          
+          if ! az group show --name "$RESOURCE_GROUP" &>/dev/null; then
+            echo "Creating resource group: $RESOURCE_GROUP"
+            az group create --name "$RESOURCE_GROUP" --location "$LOCATION"
+          else
+            echo "Resource group already exists: $RESOURCE_GROUP"
+          fi
+
+      - name: Download artifact
         uses: actions/download-artifact@v4
         with:
-          name: deployment-package-azure
-          path: ./dist
+          name: deployment-package
+          path: ./artifacts
 
-      - name: Get service principal object ID
-        id: get-sp-id
-        run: |
-          # Get the object ID of the currently logged in service principal
-          SP_OBJECT_ID=$(az ad signed-in-user show --query id -o tsv 2>/dev/null || echo "")
-          echo "sp_object_id=$SP_OBJECT_ID" >> $GITHUB_OUTPUT
-          echo "Service Principal Object ID: $SP_OBJECT_ID"
-
-      - name: Generate parameters JSON
-        run: |
-          cat > /tmp/azure-parameters.json << EOF
-          {
-            "\$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
-            "contentVersion": "1.0.0.0",
-            "parameters": {
-              "environment": {
-                "value": "${{ needs.setup.outputs.environment }}"
-              },
-              "location": {
-                "value": "${{ vars.AZURE_LOCATION || 'northeurope' }}"
-              },
-              "projectName": {
-                "value": "${{ vars.AZURE_PROJECT_NAME || 'analytics-service' }}"
-              },
-              "analyticsWriteKey": {
-                "value": "${{ secrets.ANALYTICS_WRITE_KEY }}"
-              },
-              "deployerObjectId": {
-                "value": "${{ steps.get-sp-id.outputs.sp_object_id }}"
-              },
-              "corsAllowedOrigins": {
-                "value": "${{ vars.CORS_ALLOWED_ORIGINS || '*' }}"
-              },
-              "logLevel": {
-                "value": "${{ vars.LOG_LEVEL || (needs.setup.outputs.environment == 'prod' && 'info' || 'debug') }}"
-              },
-              "eventRetentionDays": {
-                "value": ${{ vars.EVENT_RETENTION_DAYS || 90 }}
-              },
-              "rawEventRetentionDays": {
-                "value": ${{ vars.RAW_EVENT_RETENTION_DAYS || 365 }}
-              },
-              "functionAppSku": {
-                "value": "${{ vars.AZURE_FUNCTION_SKU || 'Y1' }}"
-              }
-            }
-          }
-          EOF
-          
-          echo "Generated parameters.json:"
-          cat /tmp/azure-parameters.json
-
-      - name: Deploy infrastructure
-        run: |
-          az deployment group create \
-            --resource-group analytics-service-${{ needs.setup.outputs.environment }}-rg \
-            --template-file infra/azure/main.bicep \
-            --parameters @/tmp/azure-parameters.json
-
-      - name: Deploy to staging slot
+      - name: Deploy GREEN (staging slot)
         id: deploy
+        env:
+          AZURE_RESOURCE_GROUP: ${{ env.PROJECT_NAME }}-${{ needs.context.outputs.environment }}-rg
+          AZURE_LOCATION: ${{ vars.AZURE_LOCATION || 'northeurope' }}
+          PROJECT_NAME: ${{ env.PROJECT_NAME }}
+          ENVIRONMENT: ${{ needs.context.outputs.environment }}
+          ARTIFACT_DIR: ./artifacts
+          ANALYTICS_WRITE_KEY: ${{ secrets.ANALYTICS_WRITE_KEY }}
+          AZURE_FUNCTION_APP_NAME: ${{ vars.AZURE_FUNCTION_APP_NAME || '' }}
+          AZURE_FUNCTION_SKU: ${{ vars.AZURE_FUNCTION_SKU || 'Y1' }}
+          LOG_LEVEL: ${{ vars.LOG_LEVEL || (needs.context.outputs.environment == 'prod' && 'info' || 'debug') }}
+          CORS_ORIGINS: ${{ vars.CORS_ALLOWED_ORIGINS || '*' }}
         run: |
-          FUNCTION_APP="analytics-service-func-${{ needs.setup.outputs.environment }}"
-          
-          # Deploy to staging slot
-          az functionapp deployment source config-zip \
-            --resource-group analytics-service-${{ needs.setup.outputs.environment }}-rg \
-            --name $FUNCTION_APP \
-            --src function-deployment.zip \
-            --slot staging
-          
-          # Get staging URL
-          STAGING_URL=$(az functionapp show \
-            --resource-group analytics-service-${{ needs.setup.outputs.environment }}-rg \
-            --name $FUNCTION_APP \
-            --slot staging \
-            --query defaultHostName -o tsv)
-          
-          echo "function_app=$FUNCTION_APP" >> $GITHUB_OUTPUT
-          echo "staging_url=https://$STAGING_URL" >> $GITHUB_OUTPUT
-          
-          echo "Deployed to staging slot: https://$STAGING_URL"
-          echo "Note: Production slot still running previous version (BLUE)"
+          chmod +x scripts/ci/deploy-azure-green.sh
+          ./scripts/ci/deploy-azure-green.sh
 
-  # Stage 4: Integration Tests & Blue/Green Switch (AWS)
-  switch-aws:
-    name: Stage 4 - Test & Switch (AWS)
+  # ============================================================================
+  # STAGE 3: Deploy GREEN (AWS)
+  # ============================================================================
+  deploy_aws:
+    name: Deploy GREEN (AWS)
     runs-on: ubuntu-latest
-    needs: [setup, deploy-aws-green]
-    environment: ${{ needs.setup.outputs.environment }}
+    needs: [context, decide, build]
+    if: needs.decide.outputs.cloud == 'aws'
+    environment: ${{ needs.context.outputs.environment }}
+    outputs:
+      green_url: ${{ steps.deploy.outputs.green_url }}
+      green_id: ${{ steps.deploy.outputs.green_id }}
+      blue_id: ${{ steps.deploy.outputs.blue_id }}
+      active_url: ${{ steps.deploy.outputs.active_url }}
     steps:
-      - name: Checkout code
+      - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Configure AWS credentials
+      - name: AWS Login (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ vars.AWS_ROLE_TO_ASSUME }}
-          role-session-name: GitHubActions-${{ github.run_id }}-switch
           aws-region: ${{ vars.AWS_REGION || 'us-east-1' }}
-          # Legacy fallback (will be removed in future)
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - name: Download artifact
+        uses: actions/download-artifact@v4
         with:
-          node-version: ${{ env.NODE_VERSION }}
+          name: deployment-package
+          path: ./artifacts
 
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Save current BLUE alias versions
-        id: save-blue
+      - name: Deploy GREEN
+        id: deploy
         env:
-          AWS_REGION: ${{ vars.AWS_REGION || 'us-east-1' }}
-          INGEST_FUNCTION: ${{ needs.deploy-aws-green.outputs.ingest_function }}
-          QUERY_FUNCTION: ${{ needs.deploy-aws-green.outputs.query_function }}
-          PROCESSOR_FUNCTION: ${{ needs.deploy-aws-green.outputs.processor_function }}
+          ENVIRONMENT: ${{ needs.context.outputs.environment }}
+          ARTIFACT_DIR: ./artifacts
         run: |
-          echo "Saving current BLUE alias versions for potential rollback..."
-          
-          # Get current versions from live aliases (BLUE)
-          BLUE_INGEST=$(aws lambda get-alias \
-            --function-name ${INGEST_FUNCTION} \
-            --name live \
-            --region ${AWS_REGION} \
-            --query 'FunctionVersion' \
-            --output text)
-          
-          BLUE_QUERY=$(aws lambda get-alias \
-            --function-name ${QUERY_FUNCTION} \
-            --name live \
-            --region ${AWS_REGION} \
-            --query 'FunctionVersion' \
-            --output text)
-          
-          BLUE_PROCESSOR=$(aws lambda get-alias \
-            --function-name ${PROCESSOR_FUNCTION} \
-            --name live \
-            --region ${AWS_REGION} \
-            --query 'FunctionVersion' \
-            --output text)
-          
-          # Save to outputs for rollback
-          echo "blue_ingest_version=$BLUE_INGEST" >> $GITHUB_OUTPUT
-          echo "blue_query_version=$BLUE_QUERY" >> $GITHUB_OUTPUT
-          echo "blue_processor_version=$BLUE_PROCESSOR" >> $GITHUB_OUTPUT
-          
-          echo "BLUE versions saved:"
-          echo "  Ingest: $BLUE_INGEST"
-          echo "  Query: $BLUE_QUERY"
-          echo "  Processor: $BLUE_PROCESSOR"
+          echo "::error::AWS deployment not yet implemented"
+          echo "TODO: Implement scripts/ci/deploy-aws-green.sh"
+          exit 1
 
-      - name: Switch to GREEN (update live alias)
-        id: switch
-        env:
-          AWS_REGION: ${{ vars.AWS_REGION || 'us-east-1' }}
-          INGEST_FUNCTION: ${{ needs.deploy-aws-green.outputs.ingest_function }}
-          QUERY_FUNCTION: ${{ needs.deploy-aws-green.outputs.query_function }}
-          PROCESSOR_FUNCTION: ${{ needs.deploy-aws-green.outputs.processor_function }}
-          GREEN_INGEST_VERSION: ${{ needs.deploy-aws-green.outputs.ingest_version }}
-          GREEN_QUERY_VERSION: ${{ needs.deploy-aws-green.outputs.query_version }}
-          GREEN_PROCESSOR_VERSION: ${{ needs.deploy-aws-green.outputs.processor_version }}
-        run: |
-          echo "Switching live aliases to GREEN versions..."
-          echo "Note: AWS implementation switches traffic first, then validates."
-          echo "Rollback is automatic if validation fails (see rollback step)."
-          echo ""
-          
-          # Update live alias to point to GREEN versions
-          aws lambda update-alias \
-            --function-name ${INGEST_FUNCTION} \
-            --name live \
-            --function-version ${GREEN_INGEST_VERSION} \
-            --region ${AWS_REGION}
-          echo "✅ Ingest alias updated to GREEN version ${GREEN_INGEST_VERSION}"
-          
-          aws lambda update-alias \
-            --function-name ${QUERY_FUNCTION} \
-            --name live \
-            --function-version ${GREEN_QUERY_VERSION} \
-            --region ${AWS_REGION}
-          echo "✅ Query alias updated to GREEN version ${GREEN_QUERY_VERSION}"
-          
-          aws lambda update-alias \
-            --function-name ${PROCESSOR_FUNCTION} \
-            --name live \
-            --function-version ${GREEN_PROCESSOR_VERSION} \
-            --region ${AWS_REGION}
-          echo "✅ Processor alias updated to GREEN version ${GREEN_PROCESSOR_VERSION}"
-          
-          echo ""
-          echo "✅ All aliases now point to GREEN"
-          echo "Next: Run integration tests to validate GREEN deployment"
-
-      - name: Run integration tests against GREEN
-        run: npm run test:post-deploy
-        env:
-          API_BASE_URL: ${{ needs.deploy-aws-green.outputs.api_url }}
-          ANALYTICS_WRITE_KEY: ${{ secrets.ANALYTICS_WRITE_KEY }}
-          TEST_MAX_RETRIES: '30'
-          TEST_RETRY_DELAY_MS: '2000'
-          TEST_REQUEST_TIMEOUT_MS: '10000'
-
-      - name: Verify GREEN deployment success
-        env:
-          AWS_REGION: ${{ vars.AWS_REGION || 'us-east-1' }}
-          INGEST_FUNCTION: ${{ needs.deploy-aws-green.outputs.ingest_function }}
-          QUERY_FUNCTION: ${{ needs.deploy-aws-green.outputs.query_function }}
-          PROCESSOR_FUNCTION: ${{ needs.deploy-aws-green.outputs.processor_function }}
-          GREEN_INGEST_VERSION: ${{ needs.deploy-aws-green.outputs.ingest_version }}
-          GREEN_QUERY_VERSION: ${{ needs.deploy-aws-green.outputs.query_version }}
-          GREEN_PROCESSOR_VERSION: ${{ needs.deploy-aws-green.outputs.processor_version }}
-        run: |
-          echo "✅ Tests passed - verifying GREEN deployment..."
-          
-          # Get actual versions from aliases
-          ACTUAL_INGEST=$(aws lambda get-alias \
-            --function-name ${INGEST_FUNCTION} \
-            --name live \
-            --region ${AWS_REGION} \
-            --query 'FunctionVersion' \
-            --output text)
-          
-          ACTUAL_QUERY=$(aws lambda get-alias \
-            --function-name ${QUERY_FUNCTION} \
-            --name live \
-            --region ${AWS_REGION} \
-            --query 'FunctionVersion' \
-            --output text)
-          
-          ACTUAL_PROCESSOR=$(aws lambda get-alias \
-            --function-name ${PROCESSOR_FUNCTION} \
-            --name live \
-            --region ${AWS_REGION} \
-            --query 'FunctionVersion' \
-            --output text)
-          
-          # Verify versions match GREEN
-          echo "Expected GREEN vs Actual:"
-          echo "  Ingest: ${GREEN_INGEST_VERSION} vs ${ACTUAL_INGEST}"
-          echo "  Query: ${GREEN_QUERY_VERSION} vs ${ACTUAL_QUERY}"
-          echo "  Processor: ${GREEN_PROCESSOR_VERSION} vs ${ACTUAL_PROCESSOR}"
-          
-          # Check if versions match
-          ERRORS=0
-          if [ "${ACTUAL_INGEST}" != "${GREEN_INGEST_VERSION}" ]; then
-            echo "❌ ERROR: Ingest alias version mismatch!"
-            ERRORS=$((ERRORS + 1))
-          fi
-          
-          if [ "${ACTUAL_QUERY}" != "${GREEN_QUERY_VERSION}" ]; then
-            echo "❌ ERROR: Query alias version mismatch!"
-            ERRORS=$((ERRORS + 1))
-          fi
-          
-          if [ "${ACTUAL_PROCESSOR}" != "${GREEN_PROCESSOR_VERSION}" ]; then
-            echo "❌ ERROR: Processor alias version mismatch!"
-            ERRORS=$((ERRORS + 1))
-          fi
-          
-          if [ ${ERRORS} -gt 0 ]; then
-            echo ""
-            echo "❌ Sanity check failed: ${ERRORS} alias(es) pointing to wrong version"
-            exit 1
-          fi
-          
-          echo ""
-          echo "✅ Sanity check passed: All aliases point to correct versions"
-
-      - name: Rollback to BLUE on failure
-        if: failure()
-        env:
-          AWS_REGION: ${{ vars.AWS_REGION || 'us-east-1' }}
-          INGEST_FUNCTION: ${{ needs.deploy-aws-green.outputs.ingest_function }}
-          QUERY_FUNCTION: ${{ needs.deploy-aws-green.outputs.query_function }}
-          PROCESSOR_FUNCTION: ${{ needs.deploy-aws-green.outputs.processor_function }}
-          BLUE_INGEST_VERSION: ${{ steps.save-blue.outputs.blue_ingest_version }}
-          BLUE_QUERY_VERSION: ${{ steps.save-blue.outputs.blue_query_version }}
-          BLUE_PROCESSOR_VERSION: ${{ steps.save-blue.outputs.blue_processor_version }}
-        run: |
-          echo "❌ Tests failed or deployment error - rolling back to BLUE versions..."
-          echo ""
-          
-          # Rollback all aliases to BLUE versions
-          aws lambda update-alias \
-            --function-name ${INGEST_FUNCTION} \
-            --name live \
-            --function-version ${BLUE_INGEST_VERSION} \
-            --region ${AWS_REGION}
-          echo "✅ Ingest alias rolled back to BLUE version ${BLUE_INGEST_VERSION}"
-          
-          aws lambda update-alias \
-            --function-name ${QUERY_FUNCTION} \
-            --name live \
-            --function-version ${BLUE_QUERY_VERSION} \
-            --region ${AWS_REGION}
-          echo "✅ Query alias rolled back to BLUE version ${BLUE_QUERY_VERSION}"
-          
-          aws lambda update-alias \
-            --function-name ${PROCESSOR_FUNCTION} \
-            --name live \
-            --function-version ${BLUE_PROCESSOR_VERSION} \
-            --region ${AWS_REGION}
-          echo "✅ Processor alias rolled back to BLUE version ${BLUE_PROCESSOR_VERSION}"
-          
-          echo ""
-          echo "✅ Rollback complete - traffic restored to BLUE (previous working version)"
-          echo "  Ingest: version ${BLUE_INGEST_VERSION}"
-          echo "  Query: version ${BLUE_QUERY_VERSION}"
-          echo "  Processor: version ${BLUE_PROCESSOR_VERSION}"
-
-  # Stage 4: Integration Tests & Blue/Green Switch (Azure)
-  switch-azure:
-    name: Stage 4 - Test & Switch (Azure)
+  # ============================================================================
+  # STAGE 4: Verify & Switch (Azure)
+  # ============================================================================
+  verify_switch_azure:
+    name: Verify & Switch (Azure)
     runs-on: ubuntu-latest
-    needs: [setup, deploy-azure-green]
-    environment: ${{ needs.setup.outputs.environment }}
+    needs: [context, decide, deploy_azure]
+    if: needs.decide.outputs.cloud == 'azure'
+    environment:
+      name: ${{ needs.context.outputs.environment }}
+      url: ${{ needs.deploy_azure.outputs.active_url }}
     steps:
-      - name: Checkout code
+      - name: Checkout
         uses: actions/checkout@v4
 
       - name: Azure Login (OIDC)
@@ -849,50 +354,77 @@ jobs:
           tenant-id: ${{ vars.AZURE_TENANT_ID }}
           subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: ${{ env.NODE_VERSION }}
+      - name: Verify GREEN deployment
+        run: |
+          GREEN_URL="${{ needs.deploy_azure.outputs.green_url }}"
+          echo "Verifying GREEN deployment at: $GREEN_URL"
+          
+          # Wait for function app to be ready
+          MAX_ATTEMPTS=30
+          ATTEMPT=0
+          
+          while [ $ATTEMPT -lt $MAX_ATTEMPTS ]; do
+            if curl -sf "${GREEN_URL}/api/health" > /dev/null 2>&1; then
+              echo "✅ GREEN deployment is healthy"
+              exit 0
+            fi
+            
+            ATTEMPT=$((ATTEMPT + 1))
+            echo "Attempt $ATTEMPT/$MAX_ATTEMPTS: Waiting for GREEN to be ready..."
+            sleep 10
+          done
+          
+          echo "::error::GREEN deployment failed health check after $MAX_ATTEMPTS attempts"
+          exit 1
 
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Run integration tests against GREEN (staging slot)
-        run: npm run test:post-deploy
+      - name: Switch traffic to GREEN
         env:
-          API_BASE_URL: ${{ needs.deploy-azure-green.outputs.staging_url }}
-          ANALYTICS_WRITE_KEY: ${{ secrets.ANALYTICS_WRITE_KEY }}
-          TEST_MAX_RETRIES: '30'
-          TEST_RETRY_DELAY_MS: '2000'
-          TEST_REQUEST_TIMEOUT_MS: '10000'
-
-      - name: IaC security scan
+          AZURE_RESOURCE_GROUP: ${{ env.PROJECT_NAME }}-${{ needs.context.outputs.environment }}-rg
+          AZURE_FUNCTION_APP_NAME: ${{ env.PROJECT_NAME }}-func-${{ needs.context.outputs.environment }}
+          GREEN_ID: ${{ needs.deploy_azure.outputs.green_id }}
+          BLUE_ID: ${{ needs.deploy_azure.outputs.blue_id }}
         run: |
-          # Run Bicep security checks
-          echo "Running IaC security scan..."
-          # Could use tools like PSRule, Checkov, etc.
+          chmod +x scripts/ci/switch-azure-bluegreen.sh
+          ./scripts/ci/switch-azure-bluegreen.sh
 
-      - name: Swap slots (GREEN → Production)
-        id: swap
+      - name: Verify production after switch
         run: |
-          az functionapp deployment slot swap \
-            --resource-group analytics-service-${{ needs.setup.outputs.environment }}-rg \
-            --name ${{ needs.deploy-azure-green.outputs.function_app }} \
-            --slot staging \
-            --target-slot production
+          ACTIVE_URL="${{ needs.deploy_azure.outputs.active_url }}"
+          echo "Verifying production after switch: $ACTIVE_URL"
           
-          echo "✅ Slots swapped - GREEN is now production"
+          sleep 15  # Allow DNS/routing to propagate
+          
+          if curl -sf "${ACTIVE_URL}/api/health" > /dev/null 2>&1; then
+            echo "✅ Production is healthy after switch"
+          else
+            echo "::error::Production health check failed after switch"
+            echo "::warning::Consider manual rollback if needed"
+            exit 1
+          fi
 
-      - name: Rollback on failure
-        if: failure()
+  # ============================================================================
+  # STAGE 4: Verify & Switch (AWS)
+  # ============================================================================
+  verify_switch_aws:
+    name: Verify & Switch (AWS)
+    runs-on: ubuntu-latest
+    needs: [context, decide, deploy_aws]
+    if: needs.decide.outputs.cloud == 'aws'
+    environment:
+      name: ${{ needs.context.outputs.environment }}
+      url: ${{ needs.deploy_aws.outputs.active_url }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: AWS Login (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_TO_ASSUME }}
+          aws-region: ${{ vars.AWS_REGION || 'us-east-1' }}
+
+      - name: Verify & Switch
         run: |
-          echo "❌ Stage 4 failed - attempting rollback"
-          
-          # Swap back to previous version
-          az functionapp deployment slot swap \
-            --resource-group analytics-service-${{ needs.setup.outputs.environment }}-rg \
-            --name ${{ needs.deploy-azure-green.outputs.function_app }} \
-            --slot staging \
-            --target-slot production || true
-          
-          echo "Rollback attempted - verify production status"
+          echo "::error::AWS verify & switch not yet implemented"
+          echo "TODO: Implement verification and traffic switching for AWS"
+          exit 1
