@@ -27,7 +27,7 @@ function loadServiceConfig(): ServiceConfig {
 }
 
 async function loadSecurityConfig(cloudProvider?: string): Promise<SecurityConfig> {
-  // Load write key from secret store if cloud provider is detected
+  // Load write key from secret store if cloud provider is detected.
   let analyticsWriteKey: string;
 
   if (cloudProvider === 'aws' || cloudProvider === 'azure') {
