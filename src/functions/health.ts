@@ -1,6 +1,6 @@
 import { app, HttpRequest, HttpResponseInit, InvocationContext } from '@azure/functions';
 
-function healthHandler(request: HttpRequest, context: InvocationContext): HttpResponseInit {
+function healthHandler(_request: HttpRequest, context: InvocationContext): HttpResponseInit {
   context.log('Health check requested');
 
   return {
