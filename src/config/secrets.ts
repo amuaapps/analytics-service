@@ -2,7 +2,7 @@ import { getOptionalEnvVar } from './env-loader.js';
 import type { CloudProvider } from './types.js';
 
 /**
- * Secret cache to avoid repeated API calls
+ * Secret cache to avoid repeated API calls.
  * Secrets are cached for the lifetime of the Lambda/Function instance
  */
 const secretCache = new Map<string, string>();
