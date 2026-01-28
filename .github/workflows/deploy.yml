@@ -400,33 +400,21 @@ jobs:
             ATTEMPT=$((ATTEMPT + 1))
             echo "Attempt $ATTEMPT/$MAX_ATTEMPTS: Checking health endpoints..."
             
-            # Try /api/health first (Azure Functions default route prefix)
-            echo "  Trying: ${GREEN_URL}/api/health"
-            RESPONSE=$(curl -s -w "\n%{http_code}" "${GREEN_URL}/api/health" 2>&1 || echo "000")
+            # Try /api/v1/health (matches routePrefix in host.json)
+            echo "  Trying: ${GREEN_URL}/api/v1/health"
+            RESPONSE=$(curl -s -w "\n%{http_code}" "${GREEN_URL}/api/v1/health" 2>&1 || echo "000")
             HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
             BODY=$(echo "$RESPONSE" | head -n-1)
             
             echo "  Response code: $HTTP_CODE"
             if [ "$HTTP_CODE" = "200" ]; then
               echo "  Response body: $BODY"
-              echo "✅ GREEN deployment is healthy at /api/health"
+              echo "✅ GREEN deployment is healthy"
               exit 0
             fi
             
-            # Try /health as fallback
-            echo "  Trying: ${GREEN_URL}/health"
-            RESPONSE=$(curl -s -w "\n%{http_code}" "${GREEN_URL}/health" 2>&1 || echo "000")
-            HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
-            BODY=$(echo "$RESPONSE" | head -n-1)
-            
-            echo "  Response code: $HTTP_CODE"
-            if [ "$HTTP_CODE" = "200" ]; then
-              echo "  Response body: $BODY"
-              echo "✅ GREEN deployment is healthy at /health"
-              exit 0
-            fi
-            
-            echo "  Neither endpoint returned 200, waiting..."
+            echo "  Response: HTTP $HTTP_CODE"
+            [ -n "$BODY" ] && echo "  Body: $BODY"
             sleep 10
           done
           
@@ -451,7 +439,7 @@ jobs:
           
           sleep 15  # Allow DNS/routing to propagate
           
-          if curl -sf "${ACTIVE_URL}/health" > /dev/null 2>&1; then
+          if curl -sf "${ACTIVE_URL}/api/v1/health" > /dev/null 2>&1; then
             echo "✅ Production is healthy after switch"
           else
             echo "::error::Production health check failed after switch"
