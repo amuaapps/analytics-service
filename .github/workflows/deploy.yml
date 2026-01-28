@@ -292,6 +292,39 @@ jobs:
           chmod +x scripts/ci/deploy-azure-green.sh
           ./scripts/ci/deploy-azure-green.sh
 
+      - name: Debug - List deployed functions
+        run: |
+          FUNCTION_APP_NAME="${{ env.PROJECT_NAME }}-func-${{ needs.context.outputs.environment }}"
+          RESOURCE_GROUP="${{ env.PROJECT_NAME }}-${{ needs.context.outputs.environment }}-rg"
+          
+          echo "📋 Listing functions in staging slot:"
+          az functionapp function list \
+            --name "$FUNCTION_APP_NAME" \
+            --resource-group "$RESOURCE_GROUP" \
+            --slot staging \
+            --query "[].{Name:name, TriggerType:config.bindings[0].type}" \
+            --output table || echo "Failed to list functions"
+          
+          echo ""
+          echo "📋 Checking Function App status:"
+          az functionapp show \
+            --name "$FUNCTION_APP_NAME" \
+            --resource-group "$RESOURCE_GROUP" \
+            --slot staging \
+            --query "{State:state, HostNames:enabledHostNames}" \
+            --output json
+
+      - name: Debug - Check Function App logs
+        run: |
+          FUNCTION_APP_NAME="${{ env.PROJECT_NAME }}-func-${{ needs.context.outputs.environment }}"
+          
+          echo "📋 Recent Function App logs:"
+          az webapp log tail \
+            --name "$FUNCTION_APP_NAME" \
+            --resource-group "${{ env.PROJECT_NAME }}-${{ needs.context.outputs.environment }}-rg" \
+            --slot staging \
+            --timeout 10 || echo "Could not fetch logs"
+
   # ============================================================================
   # STAGE 3: Deploy GREEN (AWS)
   # ============================================================================
@@ -364,17 +397,41 @@ jobs:
           ATTEMPT=0
           
           while [ $ATTEMPT -lt $MAX_ATTEMPTS ]; do
-            if curl -sf "${GREEN_URL}/health" > /dev/null 2>&1; then
-              echo "✅ GREEN deployment is healthy"
+            ATTEMPT=$((ATTEMPT + 1))
+            echo "Attempt $ATTEMPT/$MAX_ATTEMPTS: Checking health endpoints..."
+            
+            # Try /api/health first (Azure Functions default route prefix)
+            echo "  Trying: ${GREEN_URL}/api/health"
+            RESPONSE=$(curl -s -w "\n%{http_code}" "${GREEN_URL}/api/health" 2>&1 || echo "000")
+            HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
+            BODY=$(echo "$RESPONSE" | head -n-1)
+            
+            echo "  Response code: $HTTP_CODE"
+            if [ "$HTTP_CODE" = "200" ]; then
+              echo "  Response body: $BODY"
+              echo "✅ GREEN deployment is healthy at /api/health"
               exit 0
             fi
             
-            ATTEMPT=$((ATTEMPT + 1))
-            echo "Attempt $ATTEMPT/$MAX_ATTEMPTS: Waiting for GREEN to be ready..."
+            # Try /health as fallback
+            echo "  Trying: ${GREEN_URL}/health"
+            RESPONSE=$(curl -s -w "\n%{http_code}" "${GREEN_URL}/health" 2>&1 || echo "000")
+            HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
+            BODY=$(echo "$RESPONSE" | head -n-1)
+            
+            echo "  Response code: $HTTP_CODE"
+            if [ "$HTTP_CODE" = "200" ]; then
+              echo "  Response body: $BODY"
+              echo "✅ GREEN deployment is healthy at /health"
+              exit 0
+            fi
+            
+            echo "  Neither endpoint returned 200, waiting..."
             sleep 10
           done
           
           echo "::error::GREEN deployment failed health check after $MAX_ATTEMPTS attempts"
+          echo "Last response from /api/health: HTTP $HTTP_CODE"
           exit 1
 
       - name: Switch traffic to GREEN
