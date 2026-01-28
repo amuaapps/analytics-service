@@ -376,7 +376,7 @@ resource functionApp 'Microsoft.Web/sites@2022-09-01' = {
     siteConfig: {
       ftpsState: 'Disabled'
       minTlsVersion: '1.2'
-      linuxFxVersion: 'NODE|${nodeVersion}'
+      nodeVersion: '~${nodeVersion}'
       appSettings: appSettings
       cors: {
         allowedOrigins: corsAllowedOrigins
@@ -401,7 +401,7 @@ resource stagingSlot 'Microsoft.Web/sites/slots@2022-09-01' = {
     siteConfig: {
       ftpsState: 'Disabled'
       minTlsVersion: '1.2'
-      linuxFxVersion: 'NODE|${nodeVersion}'
+      nodeVersion: '~${nodeVersion}'
       appSettings: appSettings
       cors: {
         allowedOrigins: corsAllowedOrigins
