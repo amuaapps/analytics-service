@@ -364,7 +364,7 @@ jobs:
           ATTEMPT=0
           
           while [ $ATTEMPT -lt $MAX_ATTEMPTS ]; do
-            if curl -sf "${GREEN_URL}/api/health" > /dev/null 2>&1; then
+            if curl -sf "${GREEN_URL}/health" > /dev/null 2>&1; then
               echo "✅ GREEN deployment is healthy"
               exit 0
             fi
@@ -394,7 +394,7 @@ jobs:
           
           sleep 15  # Allow DNS/routing to propagate
           
-          if curl -sf "${ACTIVE_URL}/api/health" > /dev/null 2>&1; then
+          if curl -sf "${ACTIVE_URL}/health" > /dev/null 2>&1; then
             echo "✅ Production is healthy after switch"
           else
             echo "::error::Production health check failed after switch"
