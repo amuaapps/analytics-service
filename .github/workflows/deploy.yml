@@ -208,6 +208,9 @@ jobs:
           cp -r dist/* deployment/
           cp package.json package-lock.json deployment/
           cd deployment
+          # Fix package.json main field to point to correct path
+          sed -i.bak 's|"main": "dist/index.js"|"main": "index.js"|' package.json
+          rm package.json.bak
           npm ci --production --ignore-scripts
           cd ..
 
