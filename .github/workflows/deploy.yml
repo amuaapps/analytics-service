@@ -312,10 +312,11 @@ jobs:
           RESOURCE_GROUP="${{ env.PROJECT_NAME }}-${{ needs.context.outputs.environment }}-rg"
           
           echo "📋 Listing functions in staging slot:"
+          # Note: az functionapp function list doesn't support --slot parameter
+          # Functions are discovered from the app, not slot-specific
           az functionapp function list \
             --name "$FUNCTION_APP_NAME" \
             --resource-group "$RESOURCE_GROUP" \
-            --slot staging \
             --query "[].{Name:name, TriggerType:config.bindings[0].type}" \
             --output table || echo "Failed to list functions"
           
@@ -333,11 +334,19 @@ jobs:
           FUNCTION_APP_NAME="${{ env.PROJECT_NAME }}-func-${{ needs.context.outputs.environment }}"
           
           echo "📋 Recent Function App logs:"
-          az webapp log tail \
+          # Use log download instead of tail for staging slot
+          az webapp log download \
             --name "$FUNCTION_APP_NAME" \
             --resource-group "${{ env.PROJECT_NAME }}-${{ needs.context.outputs.environment }}-rg" \
             --slot staging \
-            --timeout 10 || echo "Could not fetch logs"
+            --log-file staging-logs.zip 2>&1 || echo "Could not download logs"
+          
+          if [ -f staging-logs.zip ]; then
+            echo "Extracting recent logs..."
+            unzip -q staging-logs.zip 2>/dev/null || true
+            find . -name "*.log" -type f -exec tail -n 20 {} \; 2>/dev/null | head -n 50
+            rm -rf staging-logs.zip LogFiles 2>/dev/null || true
+          fi
 
       - name: Debug - Verify host.json deployment
         run: |
@@ -352,8 +361,8 @@ jobs:
             --name "$FUNCTION_APP_NAME" \
             --resource-group "$RESOURCE_GROUP" \
             --slot staging \
-            --query "hostNameSslStates[?name contains(name, '.scm.')].name" \
-            --output tsv | head -n 1)
+            --query "hostNameSslStates[?contains(name, '.scm.')].name | [0]" \
+            --output tsv)
           
           if [ -n "$SCM_URL" ]; then
             echo "SCM URL: https://$SCM_URL"
@@ -478,10 +487,10 @@ jobs:
           # 1. List registered functions
           echo "📋 1. Registered Functions in Staging Slot:"
           echo "-------------------------------------------"
+          # Note: az functionapp function list doesn't support --slot parameter
           az functionapp function list \
             --name "$FUNCTION_APP_NAME" \
             --resource-group "$RESOURCE_GROUP" \
-            --slot staging \
             --query "[].{Name:name, TriggerType:config.bindings[0].type, Route:config.bindings[0].route}" \
             --output table 2>&1 || echo "⚠️  Failed to list functions"
           echo ""
@@ -519,13 +528,21 @@ jobs:
             --output table 2>&1 || echo "⚠️  Failed to check env vars"
           echo ""
           
-          # 5. Fetch recent logs (last 50 lines with 15 second timeout)
-          echo "📜 5. Recent Application Logs (last 50 lines):"
+          # 5. Fetch recent logs
+          echo "📜 5. Recent Application Logs:"
           echo "-------------------------------------------"
-          timeout 15s az webapp log tail \
+          az webapp log download \
             --name "$FUNCTION_APP_NAME" \
             --resource-group "$RESOURCE_GROUP" \
-            --slot staging 2>&1 | tail -n 50 || echo "⚠️  Could not fetch logs (timeout or unavailable)"
+            --slot staging \
+            --log-file failure-logs.zip 2>&1 || echo "⚠️  Could not download logs"
+          
+          if [ -f failure-logs.zip ]; then
+            echo "Extracting recent logs..."
+            unzip -q failure-logs.zip 2>/dev/null || true
+            find . -name "*.log" -type f -exec tail -n 20 {} \; 2>/dev/null | head -n 100
+            rm -rf failure-logs.zip LogFiles 2>/dev/null || true
+          fi
           echo ""
           
           # 6. Check deployment status
