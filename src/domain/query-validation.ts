@@ -54,8 +54,8 @@ function preprocessQueryInput(input: unknown): unknown {
   }
 
   // Normalize sort: ensure it's a valid enum value
-  if (data.sort !== undefined && data.sort !== null) {
-    const sortStr = String(data.sort).toLowerCase();
+  if (data.sort !== undefined && data.sort !== null && typeof data.sort === 'string') {
+    const sortStr = data.sort.toLowerCase();
     if (sortStr === 'asc' || sortStr === 'desc') {
       processed.sort = sortStr;
     }

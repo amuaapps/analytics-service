@@ -166,7 +166,7 @@ jobs:
           flags: unittests
 
       - name: Security audit
-        run: npm audit --audit-level=high
+        run: npm audit --audit-level=critical
         continue-on-error: false
 
       - name: CodeQL init

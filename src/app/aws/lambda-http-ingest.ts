@@ -30,9 +30,8 @@ function parseBody(event: APIGatewayProxyEvent): unknown {
 
   try {
     return JSON.parse(event.body);
-  } catch (error) {
-    const validationError = new Error('VALIDATION_ERROR: Invalid JSON in request body');
-    throw validationError;
+  } catch {
+    throw new Error('VALIDATION_ERROR: Invalid JSON in request body');
   }
 }
 

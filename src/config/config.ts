@@ -32,7 +32,7 @@ async function loadSecurityConfig(cloudProvider?: string): Promise<SecurityConfi
 
   if (cloudProvider === 'aws' || cloudProvider === 'azure') {
     const { loadAnalyticsWriteKey } = await import('./secrets.js');
-    analyticsWriteKey = await loadAnalyticsWriteKey(cloudProvider as 'aws' | 'azure');
+    analyticsWriteKey = await loadAnalyticsWriteKey(cloudProvider);
   } else {
     // Fallback to env var for local development
     analyticsWriteKey = getRequiredEnvVar('ANALYTICS_WRITE_KEY');
