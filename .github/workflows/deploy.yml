@@ -142,10 +142,9 @@ jobs:
           cache: 'npm'
 
       - name: Install dependencies
-        # Use --audit-level=critical to allow deployment despite moderate/high vulnerabilities
-        # in third-party dependencies (AWS SDK, Azure Functions) that we cannot fix until
-        # upstream packages release updates. Only critical vulnerabilities will block CI.
-        run: npm ci --audit-level=critical
+        # Use npm install instead of npm ci to handle package overrides correctly
+        # Overrides force patched versions of transitive dependencies (undici, fast-xml-parser)
+        run: npm install --audit-level=critical
 
       - name: Lint
         run: npm run lint
@@ -200,7 +199,8 @@ jobs:
           cache: 'npm'
 
       - name: Install dependencies
-        run: npm ci --audit-level=critical
+        # Use npm install instead of npm ci to handle package overrides correctly
+        run: npm install --audit-level=critical
 
       - name: Build TypeScript
         run: npm run build
