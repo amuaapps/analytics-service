@@ -17,6 +17,23 @@ FUNCTION_APP_SKU="${AZURE_FUNCTION_SKU:-Y1}"
 LOG_LEVEL="${LOG_LEVEL:-info}"
 CORS_ORIGINS="${CORS_ORIGINS:-*}"
 
+# Convert CORS_ORIGINS to proper JSON array format for Bicep
+if [ "$CORS_ORIGINS" = "*" ]; then
+  # Single wildcard entry
+  CORS_ARRAY='["*"]'
+else
+  # Split comma-separated list into JSON array
+  # Remove spaces, split on comma, and format as JSON array
+  CORS_ARRAY=$(echo "$CORS_ORIGINS" | sed 's/[[:space:]]//g' | awk -F',' '{
+    printf "["
+    for (i=1; i<=NF; i++) {
+      if (i > 1) printf ","
+      printf "\"" $i "\""
+    }
+    printf "]"
+  }')
+fi
+
 # Auto-generate ANALYTICS_WRITE_KEY if not provided (for initial deployments)
 if [ -z "${ANALYTICS_WRITE_KEY:-}" ]; then
   echo "⚠️  ANALYTICS_WRITE_KEY not provided - generating secure random key"
@@ -49,7 +66,7 @@ az deployment group create \
       functionAppSku="$FUNCTION_APP_SKU" \
       analyticsWriteKey="$ANALYTICS_WRITE_KEY" \
       logLevel="$LOG_LEVEL" \
-      corsAllowedOrigins="['$CORS_ORIGINS']" \
+      corsAllowedOrigins="$CORS_ARRAY" \
   --output none
 
 echo "✅ Infrastructure deployed"
