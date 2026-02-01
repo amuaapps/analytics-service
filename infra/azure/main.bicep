@@ -325,27 +325,27 @@ var appSettings = [
     value: '@Microsoft.KeyVault(SecretUri=${analyticsWriteKeySecret.properties.secretUri})'
   }
   {
-    name: 'COSMOS_DB_CONNECTION_STRING'
+    name: 'AZURE_COSMOS_CONNECTION_STRING'
     value: cosmosConnString
   }
   {
-    name: 'COSMOS_DB_DATABASE_NAME'
+    name: 'AZURE_COSMOS_DATABASE_NAME'
     value: database.name
   }
   {
-    name: 'COSMOS_DB_CONTAINER_NAME'
+    name: 'AZURE_COSMOS_CONTAINER_NAME'
     value: container.name
   }
   {
-    name: 'STORAGE_QUEUE_CONNECTION_STRING'
+    name: 'AZURE_STORAGE_CONNECTION_STRING'
     value: storageConnString
   }
   {
-    name: 'STORAGE_QUEUE_NAME'
+    name: 'AZURE_QUEUE_NAME'
     value: queue.name
   }
   {
-    name: 'STORAGE_BLOB_CONTAINER_NAME'
+    name: 'AZURE_BLOB_CONTAINER_NAME'
     value: blobContainer.name
   }
   {
