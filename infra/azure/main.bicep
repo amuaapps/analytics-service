@@ -321,7 +321,7 @@ var appSettings = [
     value: appInsights.properties.ConnectionString
   }
   {
-    name: 'AMUA_ENV'
+    name: 'NODE_ENV'
     value: environment
   }
   {

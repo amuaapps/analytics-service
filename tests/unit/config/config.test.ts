@@ -126,6 +126,15 @@ describe('Configuration Module', () => {
       expect(config.service.logLevel).toBe('debug');
     });
 
+    it('should use debug log level for staging environment by default', async () => {
+      process.env.NODE_ENV = 'staging';
+      process.env.ANALYTICS_WRITE_KEY = 'test-key';
+
+      const config = await loadConfig();
+
+      expect(config.service.logLevel).toBe('debug');
+    });
+
     it('should use info log level for prod environment by default', async () => {
       process.env.NODE_ENV = 'prod';
       process.env.ANALYTICS_WRITE_KEY = 'test-key';
