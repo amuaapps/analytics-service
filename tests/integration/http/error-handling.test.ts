@@ -124,9 +124,11 @@ describe('Error Handling Integration Tests', () => {
     });
 
     it('should return consistent 400 error for invalid cursor', async () => {
+      const recentDate = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+
       const response = await request(server).get('/api/v1/events').query({
         appId: 'test-app',
-        from: '2026-01-01T00:00:00Z',
+        from: recentDate,
         cursor: 'invalid-cursor-format',
       });
 
