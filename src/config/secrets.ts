@@ -31,7 +31,7 @@ async function fetchAwsSecret(secretArn: string): Promise<string> {
       throw new Error(`Secret ${secretArn} has no string value`);
     }
 
-    // Cache the secret
+    // Cache the secret.
     secretCache.set(secretArn, secretValue);
     return secretValue;
   } catch (error) {
