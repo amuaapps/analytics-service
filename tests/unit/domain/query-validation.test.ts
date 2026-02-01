@@ -2,21 +2,24 @@ import { describe, it, expect } from '@jest/globals';
 import { validateQueryEventsInput } from '../../../src/domain/query-validation.js';
 
 describe('Query Validation', () => {
+  // Use a recent date within 31-day window for all tests
+  const recentDate = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(); // Yesterday
+
   describe('Required Parameters', () => {
     it('should validate query with minimal required fields', () => {
       const result = validateQueryEventsInput({
         appId: 'web-storefront',
-        from: '2026-01-01T00:00:00Z',
+        from: recentDate,
       });
 
       expect(result.appId).toBe('web-storefront');
-      expect(result.from).toBe('2026-01-01T00:00:00Z');
+      expect(result.from).toBe(recentDate);
     });
 
     it('should require appId', () => {
       expect(() =>
         validateQueryEventsInput({
-          from: '2026-01-01T00:00:00Z',
+          from: recentDate,
         } as any)
       ).toThrow();
     });
@@ -35,7 +38,7 @@ describe('Query Validation', () => {
       expect(() =>
         validateQueryEventsInput({
           appId: 'web-storefront',
-          from: '2026-01-01T00:00:00Z',
+          from: recentDate,
           limit: 201, // Max is 200
         })
       ).toThrow();
@@ -45,7 +48,7 @@ describe('Query Validation', () => {
       expect(() =>
         validateQueryEventsInput({
           appId: 'web-storefront',
-          from: '2026-01-01T00:00:00Z',
+          from: recentDate,
           limit: -1,
         })
       ).toThrow();
@@ -55,7 +58,7 @@ describe('Query Validation', () => {
       expect(() =>
         validateQueryEventsInput({
           appId: 'web-storefront',
-          from: '2026-01-01T00:00:00Z',
+          from: recentDate,
           limit: 0,
         })
       ).toThrow();
@@ -64,7 +67,7 @@ describe('Query Validation', () => {
     it('should accept valid limit', () => {
       const result = validateQueryEventsInput({
         appId: 'web-storefront',
-        from: '2026-01-01T00:00:00Z',
+        from: recentDate,
         limit: 100,
       });
 
@@ -76,7 +79,7 @@ describe('Query Validation', () => {
     it('should accept asc sort', () => {
       const result = validateQueryEventsInput({
         appId: 'web-storefront',
-        from: '2026-01-01T00:00:00Z',
+        from: recentDate,
         sort: 'asc',
       });
 
@@ -86,7 +89,7 @@ describe('Query Validation', () => {
     it('should accept desc sort', () => {
       const result = validateQueryEventsInput({
         appId: 'web-storefront',
-        from: '2026-01-01T00:00:00Z',
+        from: recentDate,
         sort: 'desc',
       });
 
@@ -97,7 +100,7 @@ describe('Query Validation', () => {
       expect(() =>
         validateQueryEventsInput({
           appId: 'web-storefront',
-          from: '2026-01-01T00:00:00Z',
+          from: recentDate,
           sort: 'invalid',
         } as any)
       ).toThrow();
@@ -106,10 +109,13 @@ describe('Query Validation', () => {
 
   describe('Optional Filters', () => {
     it('should accept query with all optional filters', () => {
+      const fromDate = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString(); // 7 days ago
+      const toDate = new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString(); // Yesterday
+
       const result = validateQueryEventsInput({
         appId: 'web-storefront',
-        from: '2026-01-01T00:00:00Z',
-        to: '2026-01-07T23:59:59Z',
+        from: fromDate,
+        to: toDate,
         types: ['track'],
         names: ['button.clicked', 'page.viewed'],
         userId: 'user_123',
@@ -126,19 +132,22 @@ describe('Query Validation', () => {
     });
 
     it('should accept query with to timestamp', () => {
+      const fromDate = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(); // 30 days ago
+      const toDate = new Date().toISOString(); // Now
+
       const result = validateQueryEventsInput({
         appId: 'web-storefront',
-        from: '2026-01-01T00:00:00Z',
-        to: '2026-01-31T23:59:59Z',
+        from: fromDate,
+        to: toDate,
       });
 
-      expect(result.to).toBe('2026-01-31T23:59:59Z');
+      expect(result.to).toBe(toDate);
     });
 
     it('should accept query with event types filter', () => {
       const result = validateQueryEventsInput({
         appId: 'web-storefront',
-        from: '2026-01-01T00:00:00Z',
+        from: recentDate,
         types: ['track', 'page'],
       });
 
@@ -148,7 +157,7 @@ describe('Query Validation', () => {
     it('should accept query with event names filter', () => {
       const result = validateQueryEventsInput({
         appId: 'web-storefront',
-        from: '2026-01-01T00:00:00Z',
+        from: recentDate,
         names: ['button.clicked'],
       });
 
@@ -158,7 +167,7 @@ describe('Query Validation', () => {
     it('should accept query with userId filter', () => {
       const result = validateQueryEventsInput({
         appId: 'web-storefront',
-        from: '2026-01-01T00:00:00Z',
+        from: recentDate,
         userId: 'user_123',
       });
 
@@ -168,7 +177,7 @@ describe('Query Validation', () => {
     it('should accept query with cursor for pagination', () => {
       const result = validateQueryEventsInput({
         appId: 'web-storefront',
-        from: '2026-01-01T00:00:00Z',
+        from: recentDate,
         cursor: 'eyJwayI6InRlc3QiLCJzayI6InRlc3QifQ==',
       });
 
