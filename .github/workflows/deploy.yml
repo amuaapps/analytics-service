@@ -228,6 +228,14 @@ jobs:
           cd ..
           ls -lh deployment.zip
 
+      - name: Verify deployment package contents
+        run: |
+          echo "📦 Verifying deployment package contents:"
+          unzip -l deployment.zip | grep -E "host.json|package.json|index.js" || echo "Key files not found!"
+          echo ""
+          echo "📄 host.json content in package:"
+          unzip -p deployment.zip host.json | grep -A 3 "routePrefix" || echo "routePrefix not found in host.json!"
+
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
@@ -330,6 +338,32 @@ jobs:
             --resource-group "${{ env.PROJECT_NAME }}-${{ needs.context.outputs.environment }}-rg" \
             --slot staging \
             --timeout 10 || echo "Could not fetch logs"
+
+      - name: Debug - Verify host.json deployment
+        run: |
+          FUNCTION_APP_NAME="${{ env.PROJECT_NAME }}-func-${{ needs.context.outputs.environment }}"
+          RESOURCE_GROUP="${{ env.PROJECT_NAME }}-${{ needs.context.outputs.environment }}-rg"
+          
+          echo "📄 Checking deployed host.json configuration:"
+          echo "Attempting to download host.json from deployed app..."
+          
+          # Get the SCM URL for Kudu
+          SCM_URL=$(az functionapp show \
+            --name "$FUNCTION_APP_NAME" \
+            --resource-group "$RESOURCE_GROUP" \
+            --slot staging \
+            --query "hostNameSslStates[?name contains(name, '.scm.')].name" \
+            --output tsv | head -n 1)
+          
+          if [ -n "$SCM_URL" ]; then
+            echo "SCM URL: https://$SCM_URL"
+            # Try to fetch host.json via Kudu API
+            curl -s "https://$SCM_URL/api/vfs/site/wwwroot/host.json" \
+              -H "Authorization: Bearer $(az account get-access-token --query accessToken -o tsv)" \
+              | grep -A 3 "routePrefix" || echo "Could not fetch or parse host.json from deployed app"
+          else
+            echo "Could not determine SCM URL"
+          fi
 
   # ============================================================================
   # STAGE 3: Deploy GREEN (AWS)
