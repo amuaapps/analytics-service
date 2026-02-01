@@ -142,6 +142,9 @@ jobs:
           cache: 'npm'
 
       - name: Install dependencies
+        # Use --audit-level=critical to allow deployment despite moderate/high vulnerabilities
+        # in third-party dependencies (AWS SDK, Azure Functions) that we cannot fix until
+        # upstream packages release updates. Only critical vulnerabilities will block CI.
         run: npm ci --audit-level=critical
 
       - name: Lint
