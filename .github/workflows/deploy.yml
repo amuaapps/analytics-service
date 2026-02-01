@@ -394,6 +394,8 @@ jobs:
           subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
 
       - name: Verify GREEN deployment
+        id: health_check
+        continue-on-error: true
         run: |
           GREEN_URL="${{ needs.deploy_azure.outputs.green_url }}"
           echo "Verifying GREEN deployment at: $GREEN_URL"
@@ -426,6 +428,91 @@ jobs:
           
           echo "::error::GREEN deployment failed health check after $MAX_ATTEMPTS attempts"
           echo "Last response from /api/health: HTTP $HTTP_CODE"
+          exit 1
+
+      - name: Collect diagnostics on health check failure
+        if: steps.health_check.outcome == 'failure'
+        run: |
+          FUNCTION_APP_NAME="${{ env.PROJECT_NAME }}-func-${{ needs.context.outputs.environment }}"
+          RESOURCE_GROUP="${{ env.PROJECT_NAME }}-${{ needs.context.outputs.environment }}-rg"
+          
+          echo "=========================================="
+          echo "🔍 DIAGNOSTICS: Health Check Failed"
+          echo "=========================================="
+          echo ""
+          
+          # 1. List registered functions
+          echo "📋 1. Registered Functions in Staging Slot:"
+          echo "-------------------------------------------"
+          az functionapp function list \
+            --name "$FUNCTION_APP_NAME" \
+            --resource-group "$RESOURCE_GROUP" \
+            --slot staging \
+            --query "[].{Name:name, TriggerType:config.bindings[0].type, Route:config.bindings[0].route}" \
+            --output table 2>&1 || echo "⚠️  Failed to list functions"
+          echo ""
+          
+          # 2. Check Function App runtime status
+          echo "📊 2. Function App Runtime Status:"
+          echo "-------------------------------------------"
+          az functionapp show \
+            --name "$FUNCTION_APP_NAME" \
+            --resource-group "$RESOURCE_GROUP" \
+            --slot staging \
+            --query "{State:state, RuntimeVersion:siteConfig.linuxFxVersion, NodeVersion:siteConfig.nodeVersion, AlwaysOn:siteConfig.alwaysOn}" \
+            --output json 2>&1 || echo "⚠️  Failed to get app status"
+          echo ""
+          
+          # 3. Check critical app settings (without exposing secrets)
+          echo "⚙️  3. App Settings Check (secrets redacted):"
+          echo "-------------------------------------------"
+          az functionapp config appsettings list \
+            --name "$FUNCTION_APP_NAME" \
+            --resource-group "$RESOURCE_GROUP" \
+            --slot staging \
+            --query "[?name=='FUNCTIONS_EXTENSION_VERSION' || name=='FUNCTIONS_WORKER_RUNTIME' || name=='WEBSITE_NODE_DEFAULT_VERSION' || name=='AzureWebJobsFeatureFlags' || name=='FUNCTIONS_NODE_BLOCK_ON_ENTRY_POINT_ERROR' || name=='WEBSITE_RUN_FROM_PACKAGE' || name=='NODE_ENV' || name=='LOG_LEVEL'].{Name:name, Value:value}" \
+            --output table 2>&1 || echo "⚠️  Failed to list app settings"
+          echo ""
+          
+          # 4. Check if required env vars are present (without showing values)
+          echo "🔐 4. Required Environment Variables Status:"
+          echo "-------------------------------------------"
+          az functionapp config appsettings list \
+            --name "$FUNCTION_APP_NAME" \
+            --resource-group "$RESOURCE_GROUP" \
+            --slot staging \
+            --query "[?name=='AZURE_COSMOS_CONNECTION_STRING' || name=='AZURE_COSMOS_DATABASE_NAME' || name=='AZURE_COSMOS_CONTAINER_NAME' || name=='AZURE_STORAGE_CONNECTION_STRING' || name=='AZURE_QUEUE_NAME' || name=='AZURE_BLOB_CONTAINER_NAME'].{Name:name, IsSet:value != null && value != ''}" \
+            --output table 2>&1 || echo "⚠️  Failed to check env vars"
+          echo ""
+          
+          # 5. Fetch recent logs (last 50 lines with 15 second timeout)
+          echo "📜 5. Recent Application Logs (last 50 lines):"
+          echo "-------------------------------------------"
+          timeout 15s az webapp log tail \
+            --name "$FUNCTION_APP_NAME" \
+            --resource-group "$RESOURCE_GROUP" \
+            --slot staging 2>&1 | tail -n 50 || echo "⚠️  Could not fetch logs (timeout or unavailable)"
+          echo ""
+          
+          # 6. Check deployment status
+          echo "🚀 6. Recent Deployment Status:"
+          echo "-------------------------------------------"
+          az webapp deployment list \
+            --name "$FUNCTION_APP_NAME" \
+            --resource-group "$RESOURCE_GROUP" \
+            --slot staging \
+            --query "[0].{Status:status, Message:message, Author:author, Time:received_time}" \
+            --output json 2>&1 || echo "⚠️  Failed to get deployment status"
+          echo ""
+          
+          echo "=========================================="
+          echo "End of diagnostics"
+          echo "=========================================="
+
+      - name: Fail job after diagnostics
+        if: steps.health_check.outcome == 'failure'
+        run: |
+          echo "::error::Health check failed. See diagnostics above for details."
           exit 1
 
       - name: Switch traffic to GREEN
