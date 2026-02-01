@@ -301,8 +301,16 @@ var appSettings = [
     value: '~${nodeVersion}'
   }
   {
+    name: 'FUNCTIONS_NODE_BLOCK_ON_ENTRY_POINT_ERROR'
+    value: 'true'
+  }
+  {
     name: 'WEBSITE_RUN_FROM_PACKAGE'
     value: '1'
+  }
+  {
+    name: 'AzureWebJobsFeatureFlags'
+    value: 'EnableWorkerIndexing'
   }
   {
     name: 'AzureWebJobsStorage'
