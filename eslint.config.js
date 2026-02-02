@@ -4,11 +4,20 @@ import eslintConfigPrettier from 'eslint-config-prettier';
 
 export default tseslint.config(
   {
-    ignores: ['dist', 'deployment', 'node_modules', 'coverage'],
+    ignores: ['dist', 'deployment', 'node_modules', 'coverage', 'test-deploy*'],
   },
   {
     files: ['**/*.js'],
     extends: [eslint.configs.recommended],
+    languageOptions: {
+      globals: {
+        process: 'readonly',
+        console: 'readonly',
+        Buffer: 'readonly',
+        __dirname: 'readonly',
+        __filename: 'readonly',
+      },
+    },
   },
   {
     files: ['**/*.ts'],
