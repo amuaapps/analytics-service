@@ -474,7 +474,8 @@ jobs:
           done
           
           echo "::error::GREEN deployment failed health check after $MAX_ATTEMPTS attempts"
-          echo "Last response from /api/health: HTTP $HTTP_CODE"
+          echo "Last response from /api/v1/health: HTTP $HTTP_CODE"
+          [ -n "$BODY" ] && echo "Response body: $BODY" || echo "Response body: (empty)"
           exit 1
 
       - name: Collect diagnostics on health check failure
