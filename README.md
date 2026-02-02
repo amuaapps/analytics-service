@@ -275,6 +275,12 @@ Ingest a batch of analytics events.
         },
         "userAgent": "Mozilla/5.0..."
       },
+      "consent": {
+        "analytics": true,
+        "experimentation": false,
+        "personalization": true,
+        "timestamp": "2026-01-08T10:29:00Z"
+      },
       "properties": {
         "button_id": "checkout_btn",
         "button_text": "Checkout",

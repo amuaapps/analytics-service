@@ -53,6 +53,8 @@ const contextSchema = z
 const consentSchema = z
   .object({
     analytics: z.boolean(),
+    experimentation: z.boolean(),
+    personalization: z.boolean(),
     timestamp: z.string().datetime(),
   })
   .optional();

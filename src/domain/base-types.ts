@@ -40,5 +40,7 @@ export interface Context {
 
 export interface Consent {
   analytics: boolean;
+  experimentation: boolean;
+  personalization: boolean;
   timestamp: string;
 }

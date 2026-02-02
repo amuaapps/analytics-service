@@ -108,7 +108,9 @@ Used for lightweight runtime context. Do not dump large browser/device objects.
 ### 1.10 `consent` object (optional)
 | Field | Type | Required | Notes |
 |---|---|---:|---|
-| `analytics` | boolean | ✅ | If user consented to analytics |
+| `analytics` | boolean | ✅ | If user consented to analytics tracking |
+| `experimentation` | boolean | ✅ | If user consented to A/B testing and experiments |
+| `personalization` | boolean | ✅ | If user consented to personalized experiences |
 | `timestamp` | string (ISO 8601) | ✅ | When consent was recorded |
 
 ### 1.11 Event-specific fields
