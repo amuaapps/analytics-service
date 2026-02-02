@@ -217,6 +217,10 @@ jobs:
           npm ci --production --ignore-scripts
           cd ..
 
+      - name: Validate host.json schema (Azure only)
+        if: needs.decide.outputs.cloud == 'azure'
+        run: node scripts/ci/validate-host-json.js
+
       - name: Add Azure Functions host.json
         if: needs.decide.outputs.cloud == 'azure'
         run: cp host.json deployment/
