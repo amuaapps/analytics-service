@@ -82,6 +82,6 @@ async function safeHandler(
 app.http('ingest', {
   methods: ['POST'],
   authLevel: 'anonymous',
-  route: 'events',
+  route: 'v1/events',
   handler: safeHandler,
 });

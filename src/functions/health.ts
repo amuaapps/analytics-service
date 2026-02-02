@@ -85,6 +85,6 @@ function healthHandler(_request: HttpRequest, context: InvocationContext): HttpR
 app.http('health', {
   methods: ['GET'],
   authLevel: 'anonymous',
-  route: 'health',
+  route: 'v1/health',
   handler: healthHandler,
 });

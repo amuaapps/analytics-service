@@ -455,7 +455,7 @@ jobs:
             ATTEMPT=$((ATTEMPT + 1))
             echo "Attempt $ATTEMPT/$MAX_ATTEMPTS: Checking health endpoints..."
             
-            # Try /api/v1/health (matches routePrefix in host.json)
+            # Try /api/v1/health (route-level versioning)
             echo "  Trying: ${GREEN_URL}/api/v1/health"
             RESPONSE=$(curl -s -w "\n%{http_code}" "${GREEN_URL}/api/v1/health" 2>&1 || echo "000")
             HTTP_CODE=$(echo "$RESPONSE" | tail -n1)

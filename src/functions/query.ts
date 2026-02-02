@@ -71,6 +71,6 @@ async function safeHandler(
 app.http('query', {
   methods: ['GET'],
   authLevel: 'anonymous',
-  route: 'events',
+  route: 'v1/events',
   handler: safeHandler,
 });
